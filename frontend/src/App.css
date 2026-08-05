@@ -41,7 +41,7 @@
 
 .topnav-item {
   padding: 6px 14px;
-  border-radius: 6px;
+  border-radius: 999px;
   font-size: 14px;
   color: var(--text);
   cursor: pointer;
@@ -99,13 +99,13 @@
   font: inherit;
   font-size: 14px;
   font-weight: 500;
-  padding: 9px 16px;
-  border-radius: 6px;
+  padding: 9px 18px;
+  border-radius: 999px;
   border: 1px solid var(--border);
   background: var(--surface);
   color: var(--text-h);
   cursor: pointer;
-  transition: background 0.15s, border-color 0.15s;
+  transition: background 0.15s, border-color 0.15s, box-shadow 0.15s, transform 0.15s;
   white-space: nowrap;
 }
 
@@ -122,10 +122,15 @@
   background: var(--accent);
   border-color: var(--accent);
   color: #fff;
+  font-weight: 600;
+  box-shadow: 0 6px 20px -4px var(--accent-glow);
 }
 
 .btn-primary:hover:not(:disabled) {
-  filter: brightness(1.08);
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+  box-shadow: 0 8px 24px -4px var(--accent-glow);
+  transform: translateY(-1px);
 }
 
 .btn-ghost {
@@ -157,7 +162,7 @@ textarea {
   color: var(--text-h);
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: 10px;
   padding: 9px 12px;
   box-sizing: border-box;
 }
@@ -173,7 +178,7 @@ textarea:focus {
 
 .banner {
   padding: 10px 14px;
-  border-radius: 6px;
+  border-radius: 10px;
   font-size: 14px;
   margin-bottom: 16px;
   text-align: left;
@@ -189,7 +194,7 @@ textarea:focus {
 
 .table-wrap {
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: 16px;
   overflow: auto;
   background: var(--surface);
 }
@@ -313,7 +318,7 @@ tbody tr:hover {
 .panel {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: 16px;
   box-shadow: var(--shadow);
   padding: 28px;
   width: 100%;
@@ -388,7 +393,7 @@ tbody tr:hover {
   gap: 10px;
   padding: 8px 12px;
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: 10px;
 }
 
 .number-list-item .link-btn {
