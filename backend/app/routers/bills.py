@@ -3,7 +3,7 @@ import uuid
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 
-from fastapi import APIRouter, Depends, UploadFile, File, Form
+from fastapi import APIRouter, Depends, UploadFile, File, Form, HTTPException
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -11,6 +11,8 @@ from app.schemas.bill import ImportResult, BillSummaryRow, ApprovalOverrideInput
 from app.services import bill_service
 
 router = APIRouter(prefix="/bills", tags=["bills"])
+
+SUPPORTED_SUFFIXES = {".pdf": "pdf", ".xls": "xls"}
 
 
 @router.get("", response_model=list[BillPeriodOut])
@@ -26,15 +28,23 @@ def get_bill_period(bill_period_id: uuid.UUID, db: Session = Depends(get_db)):
 @router.post("/import", response_model=ImportResult, status_code=201)
 async def import_bill(
     label: str = Form(..., description='e.g. "July 2026"'),
-    file: UploadFile = File(...),
+    file: UploadFile = File(..., description="The bill file — .pdf or .xls"),
     db: Session = Depends(get_db),
 ):
-    with NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
+    suffix = Path(file.filename or "").suffix.lower()
+    if suffix not in SUPPORTED_SUFFIXES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported file type '{suffix}' — expected .pdf or .xls",
+        )
+    source_format = SUPPORTED_SUFFIXES[suffix]
+
+    with NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
         shutil.copyfileobj(file.file, tmp)
         tmp_path = tmp.name
 
     try:
-        return bill_service.import_bill_pdf(db, tmp_path, label)
+        return bill_service.import_bill_file(db, tmp_path, label, source_format)
     finally:
         Path(tmp_path).unlink(missing_ok=True)
 

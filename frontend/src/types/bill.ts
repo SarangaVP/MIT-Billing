@@ -1,5 +1,7 @@
 // Mirrors backend/app/schemas/bill.py
 
+export type SourceFormat = "pdf" | "xls";
+
 export interface BillPeriod {
   id: string;
   label: string;
@@ -9,6 +11,9 @@ export interface BillPeriod {
   invoice_date: string | null;
   stated_total_charges_for_bill_period: number | null;
   stated_total_due_amount: number | null;
+  source_format: SourceFormat;
+  reconciled: boolean;
+  reconciliation_discrepancy: number | null;
   created_at: string;
 }
 
@@ -18,6 +23,8 @@ export interface ImportResult {
   parsed_total_charges_for_bill_period: number;
   stated_total_charges_for_bill_period: number | null;
   reconciled: boolean;
+  reconciliation_discrepancy: number | null;
+  source_format: SourceFormat;
 }
 
 export interface BillSummaryRow {
@@ -33,6 +40,14 @@ export interface BillSummaryRow {
   email: string | null;
 
   total_usage_charges: number;
+  // Only populated when the bill was imported from the .xls source —
+  // null for PDF-sourced imports, which only give the combined total above.
+  voice_rental: number | null;
+  voice_usage: number | null;
+  sms: number | null;
+  data_rental: number | null;
+  data_usage: number | null;
+
   idd: number;
   roaming: number;
   vas: number;

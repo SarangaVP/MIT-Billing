@@ -18,8 +18,12 @@ function monthValueToLabel(monthValue: string): string {
   return `${MONTH_NAMES[idx]} ${year}`;
 }
 
+function money(v: number): string {
+  return `Rs. ${Number(v).toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
+}
+
 export default function BillUploadPanel({ onImported, onCancel }: Props) {
-  const [month, setMonth] = useState(() => new Date().toISOString().slice(0, 7)); // "YYYY-MM"
+  const [month, setMonth] = useState(() => new Date().toISOString().slice(0, 7));
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -35,7 +39,7 @@ export default function BillUploadPanel({ onImported, onCancel }: Props) {
       const label = monthValueToLabel(month);
       const res = await importBillPdf(label, file);
       setResult(res);
-      if (res.reconciled) {
+      if (res.reconciled || res.source_format === "xls") {
         onImported();
       }
     } catch (err) {
@@ -44,6 +48,8 @@ export default function BillUploadPanel({ onImported, onCancel }: Props) {
       setUploading(false);
     }
   }
+
+  const isBlockingFailure = result && !result.reconciled && result.source_format === "pdf";
 
   return (
     <div className="panel-overlay" onClick={onCancel}>
@@ -56,14 +62,16 @@ export default function BillUploadPanel({ onImported, onCancel }: Props) {
         </label>
 
         <label>
-          Bill PDF
+          Bill file
           <input
             type="file"
-            accept="application/pdf"
+            accept="application/pdf,.pdf,.xls,application/vnd.ms-excel"
             required
             onChange={(e) => setFile(e.target.files?.[0] ?? null)}
           />
-          <span className="field-hint">The full Dialog corporate bill PDF for this month.</span>
+          <span className="field-hint">
+            Either the full Dialog PDF invoice, or the .xls export — both are supported.
+          </span>
         </label>
 
         {error && <p className="form-error">{error}</p>}
@@ -72,16 +80,22 @@ export default function BillUploadPanel({ onImported, onCancel }: Props) {
           <div className={`banner ${result.reconciled ? "banner-success" : "banner-error"}`}>
             {result.reconciled ? (
               <>
-                ✓ Imported {result.line_items_imported} lines. Parsed total{" "}
-                <strong>Rs. {Number(result.parsed_total_charges_for_bill_period).toLocaleString()}</strong> matches
-                the invoice exactly.
+                ✓ Imported {result.line_items_imported} lines from a {result.source_format.toUpperCase()} file.
+                Parsed total <strong>{money(result.parsed_total_charges_for_bill_period)}</strong> matches the
+                invoice exactly.
+              </>
+            ) : result.source_format === "xls" ? (
+              <>
+                Imported {result.line_items_imported} lines from the .xls file. Parsed total{" "}
+                {money(result.parsed_total_charges_for_bill_period)} is off by{" "}
+                {money(Math.abs(result.reconciliation_discrepancy ?? 0))} from the invoice's stated total — this is
+                expected (the .xls export omits some dormant/zero-activity accounts) and was allowed.
               </>
             ) : (
               <>
-                Reconciliation failed — parsed total{" "}
-                {Number(result.parsed_total_charges_for_bill_period).toLocaleString()} does not match the invoice's
-                stated total {Number(result.stated_total_charges_for_bill_period ?? 0).toLocaleString()}. Nothing was
-                saved.
+                Reconciliation failed — parsed total {money(result.parsed_total_charges_for_bill_period)} does not
+                match the invoice's stated total{" "}
+                {money(result.stated_total_charges_for_bill_period ?? 0)}. Nothing was saved.
               </>
             )}
           </div>
@@ -89,9 +103,9 @@ export default function BillUploadPanel({ onImported, onCancel }: Props) {
 
         <div className="panel-actions">
           <button type="button" className="btn btn-ghost" onClick={onCancel}>
-            {result?.reconciled ? "Close" : "Cancel"}
+            {result && !isBlockingFailure ? "Close" : "Cancel"}
           </button>
-          {!result?.reconciled && (
+          {!(result && !isBlockingFailure) && (
             <button type="submit" className="btn btn-primary" disabled={uploading || !file}>
               {uploading ? "Uploading…" : "Import bill"}
             </button>

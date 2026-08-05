@@ -56,6 +56,7 @@ export default function BillsPage() {
   });
 
   const money = (v: number) => `Rs. ${Number(v).toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
+  const hasBreakdown = summaryRows.some((r) => r.voice_rental !== null);
 
   if (selectedPeriod) {
     return (
@@ -67,7 +68,11 @@ export default function BillsPage() {
             </button>
             <h1>{selectedPeriod.label}</h1>
             <p className="page-subtitle">
-              Bill period {selectedPeriod.bill_period_start} to {selectedPeriod.bill_period_end}
+              Bill period {selectedPeriod.bill_period_start} to {selectedPeriod.bill_period_end} — imported from{" "}
+              {selectedPeriod.source_format.toUpperCase()}
+              {!selectedPeriod.reconciled && selectedPeriod.reconciliation_discrepancy != null && (
+                <> · off by {money(Math.abs(selectedPeriod.reconciliation_discrepancy))} from the stated total</>
+              )}
             </p>
           </div>
         </div>
@@ -88,6 +93,13 @@ export default function BillsPage() {
                 <th>Mobile No</th>
                 <th>EMP No</th>
                 <th>Name</th>
+                {hasBreakdown && (
+                  <>
+                    <th>Voice</th>
+                    <th>SMS</th>
+                    <th>Data</th>
+                  </>
+                )}
                 <th>Charges for Bill Period</th>
                 <th>VAT</th>
                 <th>Net Amount</th>
@@ -101,14 +113,14 @@ export default function BillsPage() {
             <tbody>
               {loadingSummary && (
                 <tr>
-                  <td colSpan={11} className="empty-row">
+                  <td colSpan={hasBreakdown ? 14 : 11} className="empty-row">
                     Loading…
                   </td>
                 </tr>
               )}
               {!loadingSummary && filteredRows.length === 0 && (
                 <tr>
-                  <td colSpan={11} className="empty-row">
+                  <td colSpan={hasBreakdown ? 14 : 11} className="empty-row">
                     No rows match.
                   </td>
                 </tr>
@@ -119,6 +131,17 @@ export default function BillsPage() {
                     <td className="mono">{row.mobile_no}</td>
                     <td className="mono">{row.emp_no || <span className="muted">—</span>}</td>
                     <td>{row.name || <span className="muted">Unmatched number</span>}</td>
+                    {hasBreakdown && (
+                      <>
+                        <td className="mono">
+                          {row.voice_rental != null ? money((row.voice_rental ?? 0) + (row.voice_usage ?? 0)) : "—"}
+                        </td>
+                        <td className="mono">{row.sms != null ? money(row.sms) : "—"}</td>
+                        <td className="mono">
+                          {row.data_rental != null ? money((row.data_rental ?? 0) + (row.data_usage ?? 0)) : "—"}
+                        </td>
+                      </>
+                    )}
                     <td className="mono">{money(row.charges_for_bill_period)}</td>
                     <td className="mono">{money(row.vat)}</td>
                     <td className="mono">{money(row.net_amount)}</td>
@@ -150,7 +173,7 @@ export default function BillsPage() {
       <div className="page-header">
         <div>
           <h1>Bills</h1>
-          <p className="page-subtitle">Monthly Dialog bill imports — parsed from the PDF, reconciled automatically.</p>
+          <p className="page-subtitle">Monthly bill imports — parsed from PDF or .xls, reconciled automatically.</p>
         </div>
         <button className="btn btn-primary" onClick={() => setShowUpload(true)}>
           + Upload bill
@@ -162,23 +185,24 @@ export default function BillsPage() {
           <thead>
             <tr>
               <th>Month</th>
+              <th>Source</th>
               <th>Bill Period</th>
               <th>Charges for Bill Period</th>
-              <th>Total Due</th>
+              <th>Reconciliation</th>
               <th></th>
             </tr>
           </thead>
           <tbody>
             {loadingPeriods && (
               <tr>
-                <td colSpan={5} className="empty-row">
+                <td colSpan={6} className="empty-row">
                   Loading…
                 </td>
               </tr>
             )}
             {!loadingPeriods && periods.length === 0 && (
               <tr>
-                <td colSpan={5} className="empty-row">
+                <td colSpan={6} className="empty-row">
                   No bills imported yet.
                 </td>
               </tr>
@@ -187,14 +211,23 @@ export default function BillsPage() {
               periods.map((p) => (
                 <tr key={p.id}>
                   <td>{p.label}</td>
+                  <td>
+                    <span className="pill pill-transferred">{p.source_format.toUpperCase()}</span>
+                  </td>
                   <td className="mono">
                     {p.bill_period_start} — {p.bill_period_end}
                   </td>
                   <td className="mono">
                     {p.stated_total_charges_for_bill_period != null ? money(p.stated_total_charges_for_bill_period) : "—"}
                   </td>
-                  <td className="mono">
-                    {p.stated_total_due_amount != null ? money(p.stated_total_due_amount) : "—"}
+                  <td>
+                    {p.reconciled ? (
+                      <span className="pill pill-active">Matched</span>
+                    ) : (
+                      <span className="pill pill-resigned" title={`Off by ${money(Math.abs(p.reconciliation_discrepancy ?? 0))}`}>
+                        Off by {money(Math.abs(p.reconciliation_discrepancy ?? 0))}
+                      </span>
+                    )}
                   </td>
                   <td>
                     <button className="link-btn" onClick={() => openPeriod(p)}>

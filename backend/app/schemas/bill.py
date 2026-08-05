@@ -14,6 +14,9 @@ class BillPeriodOut(BaseModel):
     invoice_date: date | None
     stated_total_charges_for_bill_period: Decimal | None
     stated_total_due_amount: Decimal | None
+    source_format: str
+    reconciled: bool
+    reconciliation_discrepancy: Decimal | None
     created_at: datetime
 
     model_config = {"from_attributes": True}
@@ -24,20 +27,16 @@ class ImportResult(BaseModel):
     line_items_imported: int
     parsed_total_charges_for_bill_period: Decimal
     stated_total_charges_for_bill_period: Decimal | None
-    reconciled: bool  # True if parsed total matches the invoice's own stated total
+    reconciled: bool
+    reconciliation_discrepancy: Decimal | None
+    source_format: str
 
 
 class ApprovalOverrideInput(BaseModel):
-    approval_override: str | None  # e.g. "Manager approved", or null to clear it
+    approval_override: str | None
 
 
 class BillSummaryRow(BaseModel):
-    """
-    Mirrors the source Excel 'Summary' tab, as closely as the PDF's summary
-    table allows. Everything here is either taken straight from the bill or
-    computed from a documented rule — nothing is guessed.
-    """
-
     bill_line_item_id: uuid.UUID
     mobile_no: str
 
@@ -50,6 +49,12 @@ class BillSummaryRow(BaseModel):
     email: str | None
 
     total_usage_charges: Decimal
+    voice_rental: Decimal | None
+    voice_usage: Decimal | None
+    sms: Decimal | None
+    data_rental: Decimal | None
+    data_usage: Decimal | None
+
     idd: Decimal
     roaming: Decimal
     vas: Decimal

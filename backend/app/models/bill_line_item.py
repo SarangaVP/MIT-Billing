@@ -44,6 +44,15 @@ class BillLineItem(Base):
     charges_for_bill_period = Column(Numeric(12, 2), nullable=False, default=0)
     total_due_amount = Column(Numeric(12, 2), nullable=False, default=0)
 
+    # Only populated when the source file was the .xls export (it breaks
+    # these out); a PDF-sourced import leaves them NULL, since the PDF's
+    # summary table only gives the combined total_usage_charges figure.
+    voice_rental = Column(Numeric(12, 2), nullable=True)
+    voice_usage = Column(Numeric(12, 2), nullable=True)
+    sms = Column(Numeric(12, 2), nullable=True)
+    data_rental = Column(Numeric(12, 2), nullable=True)
+    data_usage = Column(Numeric(12, 2), nullable=True)
+
     # Mirrors the source Excel's manual override behavior: the automatic
     # "OK"/"Need Approval" rule can be overridden with real text like
     # "Manager approved" — persisted here since it's a genuine decision,
