@@ -18,7 +18,7 @@ function monthValueToLabel(monthValue: string): string {
   return `${MONTH_NAMES[idx]} ${year}`;
 }
 
-function money(v: number): string {
+function money(v: string | number): string {
   return `Rs. ${Number(v).toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
 }
 
@@ -40,6 +40,8 @@ export default function BillUploadPanel({ onImported, onCancel }: Props) {
       const res = await importBillPdf(label, file);
       setResult(res);
       if (res.reconciled || res.source_format === "xls") {
+        // .xls imports succeed even with the known dormant-account gap —
+        // only a genuinely failed PDF import should block moving on.
         onImported();
       }
     } catch (err) {
@@ -88,7 +90,7 @@ export default function BillUploadPanel({ onImported, onCancel }: Props) {
               <>
                 Imported {result.line_items_imported} lines from the .xls file. Parsed total{" "}
                 {money(result.parsed_total_charges_for_bill_period)} is off by{" "}
-                {money(Math.abs(result.reconciliation_discrepancy ?? 0))} from the invoice's stated total — this is
+                {money(Math.abs(Number(result.reconciliation_discrepancy ?? 0)))} from the invoice's stated total — this is
                 expected (the .xls export omits some dormant/zero-activity accounts) and was allowed.
               </>
             ) : (

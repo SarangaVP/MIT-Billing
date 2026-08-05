@@ -1,4 +1,8 @@
 // Mirrors backend/app/schemas/bill.py
+// NOTE: numeric fields are typed `string` because FastAPI/Pydantic
+// serializes Decimal as a JSON string (to avoid float precision loss) —
+// they are NOT native JSON numbers. Always wrap with Number(v) before
+// doing arithmetic on two of these fields together.
 
 export type SourceFormat = "pdf" | "xls";
 
@@ -9,21 +13,21 @@ export interface BillPeriod {
   bill_period_start: string | null;
   bill_period_end: string | null;
   invoice_date: string | null;
-  stated_total_charges_for_bill_period: number | null;
-  stated_total_due_amount: number | null;
+  stated_total_charges_for_bill_period: string | null;
+  stated_total_due_amount: string | null;
   source_format: SourceFormat;
   reconciled: boolean;
-  reconciliation_discrepancy: number | null;
+  reconciliation_discrepancy: string | null;
   created_at: string;
 }
 
 export interface ImportResult {
   bill_period_id: string;
   line_items_imported: number;
-  parsed_total_charges_for_bill_period: number;
-  stated_total_charges_for_bill_period: number | null;
+  parsed_total_charges_for_bill_period: string;
+  stated_total_charges_for_bill_period: string | null;
   reconciled: boolean;
-  reconciliation_discrepancy: number | null;
+  reconciliation_discrepancy: string | null;
   source_format: SourceFormat;
 }
 
@@ -35,32 +39,30 @@ export interface BillSummaryRow {
   name: string | null;
   lob: string | null;
   cadre: string | null;
-  credit_limit: number | null;
+  credit_limit: string | null;
   level: string | null;
   email: string | null;
 
-  total_usage_charges: number;
-  // Only populated when the bill was imported from the .xls source —
-  // null for PDF-sourced imports, which only give the combined total above.
-  voice_rental: number | null;
-  voice_usage: number | null;
-  sms: number | null;
-  data_rental: number | null;
-  data_usage: number | null;
+  total_usage_charges: string;
+  voice_rental: string | null;
+  voice_usage: string | null;
+  sms: string | null;
+  data_rental: string | null;
+  data_usage: string | null;
 
-  idd: number;
-  roaming: number;
-  vas: number;
-  charges_for_bill_period: number;
-  vat: number;
-  add_to_bill_charges: number;
+  idd: string;
+  roaming: string;
+  vas: string;
+  charges_for_bill_period: string;
+  vat: string;
+  add_to_bill_charges: string;
 
-  net_amount: number;
-  bucket_cost: number;
-  bucket_vat: number;
-  bucket_nett: number;
-  total: number;
-  salary_deduction: number;
+  net_amount: string;
+  bucket_cost: string;
+  bucket_vat: string;
+  bucket_nett: string;
+  total: string;
+  salary_deduction: string;
   need_approval: string;
   is_overridden: boolean;
 }

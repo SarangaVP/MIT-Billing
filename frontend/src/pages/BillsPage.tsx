@@ -55,7 +55,7 @@ export default function BillsPage() {
     );
   });
 
-  const money = (v: number) => `Rs. ${Number(v).toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
+  const money = (v: string | number) => `Rs. ${Number(v).toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
   const hasBreakdown = summaryRows.some((r) => r.voice_rental !== null);
 
   if (selectedPeriod) {
@@ -71,7 +71,7 @@ export default function BillsPage() {
               Bill period {selectedPeriod.bill_period_start} to {selectedPeriod.bill_period_end} — imported from{" "}
               {selectedPeriod.source_format.toUpperCase()}
               {!selectedPeriod.reconciled && selectedPeriod.reconciliation_discrepancy != null && (
-                <> · off by {money(Math.abs(selectedPeriod.reconciliation_discrepancy))} from the stated total</>
+                <> · off by {money(Math.abs(Number(selectedPeriod.reconciliation_discrepancy)))} from the stated total</>
               )}
             </p>
           </div>
@@ -95,9 +95,11 @@ export default function BillsPage() {
                 <th>Name</th>
                 {hasBreakdown && (
                   <>
-                    <th>Voice</th>
+                    <th>Voice Rental</th>
+                    <th>Voice Usage</th>
                     <th>SMS</th>
-                    <th>Data</th>
+                    <th>Data Rental</th>
+                    <th>Data Usage</th>
                   </>
                 )}
                 <th>Charges for Bill Period</th>
@@ -113,14 +115,14 @@ export default function BillsPage() {
             <tbody>
               {loadingSummary && (
                 <tr>
-                  <td colSpan={hasBreakdown ? 14 : 11} className="empty-row">
+                  <td colSpan={hasBreakdown ? 16 : 11} className="empty-row">
                     Loading…
                   </td>
                 </tr>
               )}
               {!loadingSummary && filteredRows.length === 0 && (
                 <tr>
-                  <td colSpan={hasBreakdown ? 14 : 11} className="empty-row">
+                  <td colSpan={hasBreakdown ? 16 : 11} className="empty-row">
                     No rows match.
                   </td>
                 </tr>
@@ -133,13 +135,11 @@ export default function BillsPage() {
                     <td>{row.name || <span className="muted">Unmatched number</span>}</td>
                     {hasBreakdown && (
                       <>
-                        <td className="mono">
-                          {row.voice_rental != null ? money((row.voice_rental ?? 0) + (row.voice_usage ?? 0)) : "—"}
-                        </td>
-                        <td className="mono">{row.sms != null ? money(row.sms) : "—"}</td>
-                        <td className="mono">
-                          {row.data_rental != null ? money((row.data_rental ?? 0) + (row.data_usage ?? 0)) : "—"}
-                        </td>
+                        <td className="mono">{row.voice_rental != null ? money(Number(row.voice_rental)) : "—"}</td>
+                        <td className="mono">{row.voice_usage != null ? money(Number(row.voice_usage)) : "—"}</td>
+                        <td className="mono">{row.sms != null ? money(Number(row.sms)) : "—"}</td>
+                        <td className="mono">{row.data_rental != null ? money(Number(row.data_rental)) : "—"}</td>
+                        <td className="mono">{row.data_usage != null ? money(Number(row.data_usage)) : "—"}</td>
                       </>
                     )}
                     <td className="mono">{money(row.charges_for_bill_period)}</td>
@@ -147,7 +147,7 @@ export default function BillsPage() {
                     <td className="mono">{money(row.net_amount)}</td>
                     <td className="mono">{money(row.bucket_cost)}</td>
                     <td className="mono">{money(row.total)}</td>
-                    <td className="mono">{row.salary_deduction > 0 ? money(row.salary_deduction) : "—"}</td>
+                    <td className="mono">{Number(row.salary_deduction) > 0 ? money(row.salary_deduction) : "—"}</td>
                     <td>
                       <span className={`pill ${row.need_approval === "OK" ? "pill-active" : "pill-resigned"}`}>
                         {row.need_approval}
@@ -224,8 +224,8 @@ export default function BillsPage() {
                     {p.reconciled ? (
                       <span className="pill pill-active">Matched</span>
                     ) : (
-                      <span className="pill pill-resigned" title={`Off by ${money(Math.abs(p.reconciliation_discrepancy ?? 0))}`}>
-                        Off by {money(Math.abs(p.reconciliation_discrepancy ?? 0))}
+                      <span className="pill pill-resigned" title={`Off by ${money(Math.abs(Number(p.reconciliation_discrepancy ?? 0)))}`}>
+                        Off by {money(Math.abs(Number(p.reconciliation_discrepancy ?? 0)))}
                       </span>
                     )}
                   </td>
