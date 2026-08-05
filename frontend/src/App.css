@@ -245,6 +245,13 @@ tbody tr:hover {
   font-size: 13px;
 }
 
+.numbers-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  white-space: normal;
+}
+
 .muted {
   color: var(--text);
   opacity: 0.6;

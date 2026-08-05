@@ -60,10 +60,8 @@ export default function EmployeesPage() {
     load();
   }
 
-  function formatNumbers(employee: Employee): string {
-    const active = employee.mobile_numbers.filter((n) => n.status === "active");
-    if (active.length === 0) return "—";
-    return active.map((n) => n.mobile_no).join(", ");
+  function activeNumbers(employee: Employee): string[] {
+    return employee.mobile_numbers.filter((n) => n.status === "active").map((n) => n.mobile_no);
   }
 
   return (
@@ -131,7 +129,13 @@ export default function EmployeesPage() {
             {!loading &&
               employees.map((emp) => (
                 <tr key={emp.id}>
-                  <td className="mono">{formatNumbers(emp)}</td>
+                  <td className="mono numbers-cell">
+                    {activeNumbers(emp).length === 0 ? (
+                      <span className="muted">—</span>
+                    ) : (
+                      activeNumbers(emp).map((n) => <span key={n}>{n}</span>)
+                    )}
+                  </td>
                   <td className="mono">{emp.emp_no}</td>
                   <td>{emp.name}</td>
                   <td>{emp.lob || <span className="muted">—</span>}</td>
