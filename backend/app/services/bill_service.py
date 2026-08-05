@@ -191,7 +191,12 @@ def _build_summary_rows(db: Session, line_items: list[BillLineItem], as_of: date
 
         net_amount = li.charges_for_bill_period - li.vat
         total = net_amount + bucket_nett
-        salary_deduction = li.vas
+
+        # Salary Deduction = VAS + Add To Bill Charges (both are personal/
+        # extra charges recovered via payroll, per current business rule —
+        # note this differs from the one Excel snapshot we originally
+        # reverse-engineered, which only used VAS; this is the corrected rule).
+        salary_deduction = li.vas + li.add_to_bill_charges
 
         if li.approval_override:
             need_approval = li.approval_override

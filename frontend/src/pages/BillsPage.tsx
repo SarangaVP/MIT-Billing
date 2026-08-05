@@ -102,6 +102,8 @@ export default function BillsPage() {
                     <th>Data Usage</th>
                   </>
                 )}
+                <th>IDD</th>
+                <th>Roaming</th>
                 <th>Charges for Bill Period</th>
                 <th>VAT</th>
                 <th>Net Amount</th>
@@ -115,14 +117,14 @@ export default function BillsPage() {
             <tbody>
               {loadingSummary && (
                 <tr>
-                  <td colSpan={hasBreakdown ? 16 : 11} className="empty-row">
+                  <td colSpan={hasBreakdown ? 18 : 13} className="empty-row">
                     Loading…
                   </td>
                 </tr>
               )}
               {!loadingSummary && filteredRows.length === 0 && (
                 <tr>
-                  <td colSpan={hasBreakdown ? 16 : 11} className="empty-row">
+                  <td colSpan={hasBreakdown ? 18 : 13} className="empty-row">
                     No rows match.
                   </td>
                 </tr>
@@ -142,6 +144,8 @@ export default function BillsPage() {
                         <td className="mono">{row.data_usage != null ? money(Number(row.data_usage)) : "—"}</td>
                       </>
                     )}
+                    <td className="mono">{money(row.idd)}</td>
+                    <td className="mono">{money(row.roaming)}</td>
                     <td className="mono">{money(row.charges_for_bill_period)}</td>
                     <td className="mono">{money(row.vat)}</td>
                     <td className="mono">{money(row.net_amount)}</td>
