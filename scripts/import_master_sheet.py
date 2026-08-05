@@ -5,7 +5,7 @@ maintained Excel file and loads it into employees + mobile_numbers.
 The sheet actually contains TWO tables stacked on top of each other:
 
   1. The main employee list (row 1 header: Mobile No | EMP No | Name | LOB |
-     Cadre | Credit Limit | Level | Email | ...)
+     Cadre | Credit Limit | Level | Email | Resignation | ...)
 
   2. A second block, labeled "Additional common connection", listing extra
      mobile numbers for EMP Nos that already exist in table 1 — but its
@@ -17,12 +17,17 @@ lines (security post phones, a shared data bucket) not tied to one named
 person. These are SET ASIDE for now, not imported, reported separately.
 
 Some employees in table 1 have a placeholder like "No" instead of a real
-mobile number — this means the employee genuinely has no company mobile
-number assigned. They are still imported as employees, just with zero
-mobile numbers attached.
+mobile number — meaning the employee genuinely has no company mobile
+number assigned. They're still imported as employees, with zero numbers.
 
-Only a truly empty cell is converted to NULL. Everything else — including
-literal "#N/A" text, 0s, or stray characters — is imported as-is.
+The Resignation column (usually "No", sometimes a date in varying formats)
+is imported as-is into employees.resignation as plain text — it is not
+parsed into a structured status/date.
+
+Only a truly empty cell is converted to NULL. Stray invisible BOM
+characters (a copy-paste artifact seen in ~49 names) are stripped, since
+they carry no real information and only cause display/search bugs.
+Everything else — including literal "#N/A" text, 0s — is imported as-is.
 
 Usage:
     python scripts/import_master_sheet.py /path/to/Mobile_bill_July_26.xlsx
@@ -48,10 +53,15 @@ def is_no_number_placeholder(value) -> bool:
 
 
 def clean(value):
+    """Converts a truly empty cell to None, and strips invisible BOM
+    characters (U+FEFF) that appear stuck in some names from copy-pasting.
+    Everything else is left exactly as-is."""
     if value is None:
         return None
-    if isinstance(value, str) and value.strip() == "":
-        return None
+    if isinstance(value, str):
+        value = value.replace("\ufeff", "")
+        if value.strip() == "":
+            return None
     return value
 
 
@@ -99,6 +109,7 @@ def main(xlsx_path: str):
         emp_no_to_employee_id = {e.emp_no: e.id for e in db.query(Employee.id, Employee.emp_no).all()}
 
         # ---- Table 1: main employee list ----
+        # Column order: Mobile No, EMP No, Name, LOB, Cadre, Credit Limit, Level, Email, Resignation
         grouped = {}
         for row in main_rows:
             raw_mobile_no = clean(row[0] if len(row) > 0 else None)
@@ -133,6 +144,7 @@ def main(xlsx_path: str):
                 credit_limit=clean(first_row[5] if len(first_row) > 5 else None),
                 level=clean(first_row[6] if len(first_row) > 6 else None),
                 email=clean(first_row[7] if len(first_row) > 7 else None),
+                resignation=clean(first_row[8] if len(first_row) > 8 else None),
             )
             db.add(employee)
             db.flush()

@@ -4,11 +4,10 @@ from fastapi import HTTPException
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
-from app.models.employee import Employee, EmployeeStatus
+from app.models.employee import Employee
 from app.models.employee_audit_log import EmployeeAuditLog
-from app.models.employee_transition import EmployeeTransition, TransitionType
 from app.models.mobile_number import MobileNumber, MobileNumberStatus
-from app.schemas.employee import EmployeeCreate, EmployeeUpdate, ResignRequest, TransferRequest
+from app.schemas.employee import EmployeeCreate, EmployeeUpdate
 from app.schemas.mobile_number import MobileNumberCreate
 
 
@@ -32,29 +31,18 @@ def _assert_number_available(db: Session, mobile_no: str):
         raise HTTPException(status_code=409, detail=f"Mobile number {mobile_no} is already active for {owner_name}")
 
 
-def list_employees(
-    db: Session,
-    search: str | None = None,
-    lob: str | None = None,
-    status: EmployeeStatus | None = None,
-    include_deleted: bool = False,
-) -> list[Employee]:
+def list_employees(db: Session, search: str | None = None, lob: str | None = None, include_deleted: bool = False) -> list[Employee]:
     query = db.query(Employee)
 
     if not include_deleted:
         query = query.filter(Employee.is_deleted.is_(False))
-
-    if status:
-        query = query.filter(Employee.status == status)
 
     if lob:
         query = query.filter(Employee.lob == lob)
 
     if search:
         pattern = f"%{search}%"
-        matching_employee_ids = db.query(MobileNumber.employee_id).filter(
-            MobileNumber.mobile_no.ilike(pattern)
-        )
+        matching_employee_ids = db.query(MobileNumber.employee_id).filter(MobileNumber.mobile_no.ilike(pattern))
         query = query.filter(or_(
             Employee.name.ilike(pattern),
             Employee.emp_no.ilike(pattern),
@@ -72,10 +60,7 @@ def get_employee(db: Session, employee_id: uuid.UUID) -> Employee:
 
 
 def create_employee(db: Session, payload: EmployeeCreate) -> Employee:
-    existing = db.query(Employee).filter(
-        Employee.emp_no == payload.emp_no,
-        Employee.is_deleted.is_(False),
-    ).first()
+    existing = db.query(Employee).filter(Employee.emp_no == payload.emp_no, Employee.is_deleted.is_(False)).first()
     if existing:
         raise HTTPException(status_code=409, detail=f"EMP No {payload.emp_no} already exists")
 
@@ -120,72 +105,6 @@ def soft_delete_employee(db: Session, employee_id: uuid.UUID) -> Employee:
     return employee
 
 
-def resign_employee(db: Session, employee_id: uuid.UUID, payload: ResignRequest) -> Employee:
-    employee = get_employee(db, employee_id)
-    employee.status = EmployeeStatus.resigned
-
-    numbers = db.query(MobileNumber).filter(
-        MobileNumber.employee_id == employee.id,
-        MobileNumber.status == MobileNumberStatus.active,
-    ).all()
-
-    for number in numbers:
-        db.add(EmployeeTransition(
-            employee_id=employee.id,
-            type=TransitionType.resigned,
-            old_mobile_no=number.mobile_no,
-            effective_date=payload.effective_date,
-            notes=payload.notes,
-        ))
-
-    _log(db, employee.id, "resigned", None, {"effective_date": str(payload.effective_date)})
-    db.commit()
-    db.refresh(employee)
-    return employee
-
-
-def transfer_employee_number(db: Session, employee_id: uuid.UUID, payload: TransferRequest) -> Employee:
-    from_employee = get_employee(db, employee_id)
-    to_employee = get_employee(db, payload.new_employee_id)
-
-    number = db.query(MobileNumber).filter(
-        MobileNumber.employee_id == from_employee.id,
-        MobileNumber.mobile_no == payload.mobile_no,
-        MobileNumber.status == MobileNumberStatus.active,
-    ).first()
-    if not number:
-        raise HTTPException(
-            status_code=404,
-            detail=f"{from_employee.name} has no active number {payload.mobile_no}",
-        )
-
-    number.employee_id = to_employee.id
-    number.is_primary = False
-
-    remaining_active = db.query(MobileNumber).filter(
-        MobileNumber.employee_id == from_employee.id,
-        MobileNumber.status == MobileNumberStatus.active,
-    ).count()
-    if remaining_active == 0:
-        from_employee.status = EmployeeStatus.transferred
-
-    db.add(EmployeeTransition(
-        employee_id=from_employee.id,
-        type=TransitionType.transferred,
-        old_mobile_no=payload.mobile_no,
-        new_employee_id=to_employee.id,
-        effective_date=payload.effective_date,
-        notes=payload.notes,
-    ))
-    _log(db, from_employee.id, "transferred", None, {
-        "mobile_no": payload.mobile_no,
-        "new_employee_id": str(to_employee.id),
-    })
-    db.commit()
-    db.refresh(from_employee)
-    return from_employee
-
-
 def add_mobile_number(db: Session, employee_id: uuid.UUID, payload: MobileNumberCreate) -> MobileNumber:
     employee = get_employee(db, employee_id)
     _assert_number_available(db, payload.mobile_no)
@@ -202,10 +121,7 @@ def add_mobile_number(db: Session, employee_id: uuid.UUID, payload: MobileNumber
 
 
 def remove_mobile_number(db: Session, employee_id: uuid.UUID, number_id: uuid.UUID) -> MobileNumber:
-    number = db.query(MobileNumber).filter(
-        MobileNumber.id == number_id,
-        MobileNumber.employee_id == employee_id,
-    ).first()
+    number = db.query(MobileNumber).filter(MobileNumber.id == number_id, MobileNumber.employee_id == employee_id).first()
     if not number:
         raise HTTPException(status_code=404, detail="Mobile number not found for this employee")
 

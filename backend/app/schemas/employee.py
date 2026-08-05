@@ -4,7 +4,6 @@ from decimal import Decimal
 
 from pydantic import BaseModel, Field
 
-from app.models.employee import EmployeeStatus
 from app.schemas.mobile_number import MobileNumberOut
 
 
@@ -16,6 +15,7 @@ class EmployeeBase(BaseModel):
     credit_limit: Decimal | None = None
     level: str | None = None
     email: str | None = None
+    resignation: str | None = None
 
 
 class EmployeeCreate(EmployeeBase):
@@ -30,26 +30,14 @@ class EmployeeUpdate(BaseModel):
     credit_limit: Decimal | None = None
     level: str | None = None
     email: str | None = None
+    resignation: str | None = None
 
 
 class EmployeeOut(EmployeeBase):
     id: uuid.UUID
-    status: EmployeeStatus
     is_deleted: bool
     created_at: datetime
     updated_at: datetime
     mobile_numbers: list[MobileNumberOut] = []
 
     model_config = {"from_attributes": True}
-
-
-class ResignRequest(BaseModel):
-    effective_date: datetime
-    notes: str | None = None
-
-
-class TransferRequest(BaseModel):
-    mobile_no: str = Field(..., description="Which of the employee's numbers is being transferred")
-    new_employee_id: uuid.UUID
-    effective_date: datetime
-    notes: str | None = None

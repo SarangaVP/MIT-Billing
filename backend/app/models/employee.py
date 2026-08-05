@@ -1,17 +1,10 @@
-import enum
 import uuid
 
-from sqlalchemy import Column, String, Numeric, Boolean, DateTime, Enum, func
+from sqlalchemy import Column, String, Numeric, Boolean, DateTime, func
 from sqlalchemy.orm import relationship
 
 from app.database import Base
 from app.types import GUID
-
-
-class EmployeeStatus(str, enum.Enum):
-    active = "active"
-    resigned = "resigned"
-    transferred = "transferred"
 
 
 class Employee(Base):
@@ -28,7 +21,11 @@ class Employee(Base):
     level = Column(String, nullable=True)
     email = Column(String, nullable=True)
 
-    status = Column(Enum(EmployeeStatus), nullable=False, default=EmployeeStatus.active)
+    # Plain text, matching the source sheet exactly: usually "No", sometimes
+    # a resignation date (formats vary in the source data). Not modeled as a
+    # structured status/date — edited directly, same as every other field.
+    resignation = Column(String, nullable=True)
+
     is_deleted = Column(Boolean, nullable=False, default=False)
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())

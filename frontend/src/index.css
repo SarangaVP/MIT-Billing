@@ -11,6 +11,15 @@
   --shadow:
     rgba(0, 0, 0, 0.1) 0 10px 15px -3px, rgba(0, 0, 0, 0.05) 0 4px 6px -2px;
 
+  --success: #1a9c5c;
+  --success-bg: rgba(26, 156, 92, 0.1);
+  --danger: #d9364f;
+  --danger-bg: rgba(217, 54, 79, 0.1);
+  --warning: #b3791c;
+  --warning-bg: rgba(179, 121, 28, 0.12);
+  --surface: #fff;
+  --surface-hover: #f9f8fb;
+
   --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
   --heading: system-ui, 'Segoe UI', Roboto, sans-serif;
   --mono: ui-monospace, Consolas, monospace;
@@ -43,6 +52,15 @@
     --social-bg: rgba(47, 48, 58, 0.5);
     --shadow:
       rgba(0, 0, 0, 0.4) 0 10px 15px -3px, rgba(0, 0, 0, 0.25) 0 4px 6px -2px;
+
+    --success: #34d399;
+    --success-bg: rgba(52, 211, 153, 0.12);
+    --danger: #f87171;
+    --danger-bg: rgba(248, 113, 113, 0.12);
+    --warning: #fbbf24;
+    --warning-bg: rgba(251, 191, 36, 0.12);
+    --surface: #1c1d25;
+    --surface-hover: #23242e;
   }
 
   #social .button-icon {
@@ -51,15 +69,12 @@
 }
 
 #root {
-  width: 1126px;
-  max-width: 100%;
-  margin: 0 auto;
-  text-align: center;
-  border-inline: 1px solid var(--border);
+  width: 100%;
   min-height: 100svh;
   display: flex;
   flex-direction: column;
   box-sizing: border-box;
+  text-align: left;
 }
 
 body {

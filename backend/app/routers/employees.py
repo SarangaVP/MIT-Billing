@@ -4,14 +4,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models.employee import EmployeeStatus
-from app.schemas.employee import (
-    EmployeeCreate,
-    EmployeeUpdate,
-    EmployeeOut,
-    ResignRequest,
-    TransferRequest,
-)
+from app.schemas.employee import EmployeeCreate, EmployeeUpdate, EmployeeOut
 from app.schemas.mobile_number import MobileNumberCreate, MobileNumberOut
 from app.services import employee_service
 
@@ -19,14 +12,8 @@ router = APIRouter(prefix="/employees", tags=["employees"])
 
 
 @router.get("", response_model=list[EmployeeOut])
-def list_employees(
-    search: str | None = Query(None, description="Matches name, EMP No, or any of the employee's mobile numbers"),
-    lob: str | None = None,
-    status: EmployeeStatus | None = None,
-    include_deleted: bool = False,
-    db: Session = Depends(get_db),
-):
-    return employee_service.list_employees(db, search=search, lob=lob, status=status, include_deleted=include_deleted)
+def list_employees(search: str | None = Query(None), lob: str | None = None, include_deleted: bool = False, db: Session = Depends(get_db)):
+    return employee_service.list_employees(db, search=search, lob=lob, include_deleted=include_deleted)
 
 
 @router.post("", response_model=EmployeeOut, status_code=201)
@@ -47,16 +34,6 @@ def update_employee(employee_id: uuid.UUID, payload: EmployeeUpdate, db: Session
 @router.delete("/{employee_id}", response_model=EmployeeOut)
 def delete_employee(employee_id: uuid.UUID, db: Session = Depends(get_db)):
     return employee_service.soft_delete_employee(db, employee_id)
-
-
-@router.post("/{employee_id}/resign", response_model=EmployeeOut)
-def resign_employee(employee_id: uuid.UUID, payload: ResignRequest, db: Session = Depends(get_db)):
-    return employee_service.resign_employee(db, employee_id, payload)
-
-
-@router.post("/{employee_id}/transfer", response_model=EmployeeOut)
-def transfer_employee(employee_id: uuid.UUID, payload: TransferRequest, db: Session = Depends(get_db)):
-    return employee_service.transfer_employee_number(db, employee_id, payload)
 
 
 @router.post("/{employee_id}/mobile-numbers", response_model=MobileNumberOut, status_code=201)
