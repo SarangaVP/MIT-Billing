@@ -190,6 +190,12 @@ textarea:focus {
   border: 1px solid var(--danger);
 }
 
+.banner-success {
+  color: var(--success);
+  background: var(--success-bg);
+  border: 1px solid var(--success);
+}
+
 /* --- Table --- */
 
 .table-wrap {

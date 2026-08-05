@@ -1,0 +1,67 @@
+import uuid
+from datetime import date, datetime
+from decimal import Decimal
+
+from pydantic import BaseModel
+
+
+class BillPeriodOut(BaseModel):
+    id: uuid.UUID
+    label: str
+    corporate_code: str | None
+    bill_period_start: date | None
+    bill_period_end: date | None
+    invoice_date: date | None
+    stated_total_charges_for_bill_period: Decimal | None
+    stated_total_due_amount: Decimal | None
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class ImportResult(BaseModel):
+    bill_period_id: uuid.UUID
+    line_items_imported: int
+    parsed_total_charges_for_bill_period: Decimal
+    stated_total_charges_for_bill_period: Decimal | None
+    reconciled: bool  # True if parsed total matches the invoice's own stated total
+
+
+class ApprovalOverrideInput(BaseModel):
+    approval_override: str | None  # e.g. "Manager approved", or null to clear it
+
+
+class BillSummaryRow(BaseModel):
+    """
+    Mirrors the source Excel 'Summary' tab, as closely as the PDF's summary
+    table allows. Everything here is either taken straight from the bill or
+    computed from a documented rule — nothing is guessed.
+    """
+
+    bill_line_item_id: uuid.UUID
+    mobile_no: str
+
+    emp_no: str | None
+    name: str | None
+    lob: str | None
+    cadre: str | None
+    credit_limit: Decimal | None
+    level: str | None
+    email: str | None
+
+    total_usage_charges: Decimal
+    idd: Decimal
+    roaming: Decimal
+    vas: Decimal
+    charges_for_bill_period: Decimal
+    vat: Decimal
+    add_to_bill_charges: Decimal
+
+    net_amount: Decimal
+    bucket_cost: Decimal
+    bucket_vat: Decimal
+    bucket_nett: Decimal
+    total: Decimal
+    salary_deduction: Decimal
+    need_approval: str
+    is_overridden: bool
