@@ -20,10 +20,10 @@ class BillLineItem(Base):
     to an employee is done at query time, not enforced at write time.
     """
 
-    __tablename__ = "bill_line_items"
+    __tablename__ = "dialog_mobile_bill_line_items"
 
     id = Column(GUID, primary_key=True, default=uuid.uuid4)
-    bill_period_id = Column(GUID, ForeignKey("bill_periods.id"), nullable=False, index=True)
+    bill_period_id = Column(GUID, ForeignKey("dialog_mobile_bill_periods.id"), nullable=False, index=True)
 
     mobile_no = Column(String, nullable=False, index=True)
 

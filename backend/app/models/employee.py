@@ -8,7 +8,7 @@ from app.types import GUID
 
 
 class Employee(Base):
-    __tablename__ = "employees"
+    __tablename__ = "dialog_mobile_employees"
 
     id = Column(GUID, primary_key=True, default=uuid.uuid4)
 
