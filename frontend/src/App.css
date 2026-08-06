@@ -59,6 +59,30 @@
   cursor: not-allowed;
 }
 
+/* --- Sub navigation (module sections: Employees | Bills | Settings) --- */
+
+.subnav {
+  display: flex;
+  gap: 4px;
+  padding: 10px 32px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+
+.subnav-item {
+  padding: 5px 12px;
+  border-radius: 999px;
+  font-size: 13px;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.subnav-item.active {
+  color: var(--text-h);
+  background: var(--accent-bg);
+  font-weight: 500;
+}
+
 /* --- Content shell --- */
 
 .content {
