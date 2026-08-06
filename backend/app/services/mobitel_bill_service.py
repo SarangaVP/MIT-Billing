@@ -11,7 +11,6 @@ from app.models.mobitel_bill_period import MobitelBillPeriod
 from app.models.mobitel_bill_line_item import MobitelBillLineItem
 from app.models.mobitel_employee import MobitelEmployee, MobitelEmployeeStatus
 from app.schemas.mobitel_bill import MobitelImportResult
-from app.services.mobitel_static_ip_service import get_active_static_ip_costs
 
 
 def _resolve_period_dates(bill_date: date, start_dm: str | None, end_dm: str | None) -> tuple[date | None, date | None]:
@@ -44,7 +43,6 @@ def import_mobitel_bill(db: Session, pdf_path: str, label: str, portal_path: str
         _resolve_period_dates(bill_date, parsed["period_start_dm"], parsed["period_end_dm"])
         if bill_date else (None, None)
     )
-    as_of = bill_date or datetime.utcnow().date()
 
     active_employees = (
         db.query(MobitelEmployee)
@@ -55,10 +53,11 @@ def import_mobitel_bill(db: Session, pdf_path: str, label: str, portal_path: str
     if users == 0:
         raise HTTPException(status_code=422, detail="No active Mobitel employees to split this bill across")
 
-    static_ip_costs = get_active_static_ip_costs(db, as_of)
-    total_static_ip = sum(static_ip_costs.values()) if static_ip_costs else Decimal("0")
-
-    per_user_cost = ((net - total_static_ip) / users).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+    # Static IP cost is NOT a persistent rate anymore — every employee
+    # starts at 0 for a newly imported bill. It's set per-bill-period,
+    # per-employee, directly from the Bill Summary page (see
+    # update_static_ip_cost below), which also recalculates the split.
+    per_user_cost = (net / users).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
 
     bill_period = MobitelBillPeriod(
         label=label, bill_no=parsed["bill_no"], account_no=parsed["account_no"],
@@ -73,16 +72,14 @@ def import_mobitel_bill(db: Session, pdf_path: str, label: str, portal_path: str
 
     line_total = Decimal("0")
     for employee in active_employees:
-        static_ip_cost = static_ip_costs.get(employee.id, Decimal("0"))
-        total = (per_user_cost + static_ip_cost).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
-        line_total += total
+        data_cost = per_user_cost.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        line_total += data_cost
 
         usage = portal_data.get(employee.mobile_no, {})
 
         db.add(MobitelBillLineItem(
             bill_period_id=bill_period.id, employee_id=employee.id,
-            data_cost=per_user_cost.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP),
-            static_ip_cost=static_ip_cost, total=total,
+            data_cost=data_cost, static_ip_cost=Decimal("0"), total=data_cost,
             imsi_number=usage.get("imsi_number"),
             data_volume_mb=usage.get("data_volume_mb"),
             available_data_volume_mb=usage.get("available_data_volume_mb"),
@@ -146,5 +143,44 @@ def get_summary(db: Session, bill_period_id: uuid.UUID) -> list[dict]:
     ]
 
 
-def set_approval_override(db, line_item_id, payload):  # unused placeholder removed if present elsewhere
-    pass
+def update_static_ip_cost(db: Session, line_item_id: uuid.UUID, new_cost: Decimal) -> list[dict]:
+    """
+    Sets one line item's static IP cost for THIS bill period specifically,
+    then recalculates the whole period: since the per-user data cost is
+    (Net - total static IP) / Users, changing any one employee's static IP
+    cost changes the split for EVERYONE in that period, not just them.
+    """
+    line_item = db.query(MobitelBillLineItem).filter(MobitelBillLineItem.id == line_item_id).first()
+    if not line_item:
+        raise HTTPException(status_code=404, detail="Bill line item not found")
+
+    bill_period = get_bill_period(db, line_item.bill_period_id)
+
+    line_item.static_ip_cost = new_cost
+    db.flush()
+
+    all_items = (
+        db.query(MobitelBillLineItem)
+        .filter(MobitelBillLineItem.bill_period_id == bill_period.id)
+        .all()
+    )
+    users = len(all_items)
+    total_static_ip = sum((item.static_ip_cost or Decimal("0")) for item in all_items)
+    net = bill_period.net or Decimal("0")
+
+    per_user_cost = ((net - total_static_ip) / users).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+
+    line_total = Decimal("0")
+    for item in all_items:
+        item.data_cost = per_user_cost.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        item.total = (item.data_cost + (item.static_ip_cost or Decimal("0"))).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        line_total += item.total
+
+    discrepancy = line_total - net
+    bill_period.per_user_cost = per_user_cost
+    bill_period.reconciled = abs(discrepancy) < Decimal("0.01")
+    bill_period.reconciliation_discrepancy = discrepancy
+
+    db.commit()
+
+    return get_summary(db, bill_period.id)

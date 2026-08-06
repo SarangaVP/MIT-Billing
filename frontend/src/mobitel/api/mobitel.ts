@@ -5,8 +5,6 @@ import type {
   MobitelBillPeriod,
   MobitelImportResult,
   MobitelBillLineItemOut,
-  MobitelStaticIpRate,
-  MobitelStaticIpRateCreateInput,
 } from "../types/mobitel";
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
@@ -22,6 +20,8 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   }
   return res.json() as Promise<T>;
 }
+
+// Employees
 
 export function listMobitelEmployees(search?: string): Promise<MobitelEmployee[]> {
   const qs = search ? `?search=${encodeURIComponent(search)}` : "";
@@ -39,6 +39,8 @@ export function updateMobitelEmployee(id: string, payload: MobitelEmployeeUpdate
 export function deleteMobitelEmployee(id: string): Promise<MobitelEmployee> {
   return request<MobitelEmployee>(`/mobitel/employees/${id}`, { method: "DELETE" });
 }
+
+// Bills
 
 export function listMobitelBillPeriods(): Promise<MobitelBillPeriod[]> {
   return request<MobitelBillPeriod[]>("/mobitel/bills");
@@ -64,10 +66,12 @@ export function getMobitelBillSummary(billPeriodId: string): Promise<MobitelBill
   return request<MobitelBillLineItemOut[]>(`/mobitel/bills/${billPeriodId}/summary`);
 }
 
-export function listMobitelStaticIpRates(): Promise<MobitelStaticIpRate[]> {
-  return request<MobitelStaticIpRate[]>("/mobitel/static-ip-rates");
-}
-
-export function createMobitelStaticIpRate(payload: MobitelStaticIpRateCreateInput): Promise<MobitelStaticIpRate> {
-  return request<MobitelStaticIpRate>("/mobitel/static-ip-rates", { method: "POST", body: JSON.stringify(payload) });
+// Sets one line item's static IP cost for its bill period, and returns the
+// WHOLE recalculated summary — every row's data_cost/total may change,
+// since the per-user split depends on everyone's static IP cost together.
+export function setMobitelStaticIpCost(lineItemId: string, cost: string): Promise<MobitelBillLineItemOut[]> {
+  return request<MobitelBillLineItemOut[]>(`/mobitel/bills/line-items/${lineItemId}/static-ip-cost`, {
+    method: "PUT",
+    body: JSON.stringify({ cost }),
+  });
 }

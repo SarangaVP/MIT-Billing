@@ -1,4 +1,4 @@
-// Mirrors backend/app/schemas/mobitel_employee.py, mobitel_bill.py, mobitel_static_ip_rate.py
+// Mirrors backend/app/schemas/mobitel_employee.py, mobitel_bill.py
 // NOTE: numeric fields are `string` — FastAPI/Pydantic serializes Decimal as
 // a JSON string, not a number. Always Number(v) before arithmetic.
 
@@ -82,19 +82,4 @@ export interface MobitelBillLineItemOut {
   member_status: string | null;
   top_up_mb: string | null;
   utilized_topup_mb: string | null;
-}
-
-export interface MobitelStaticIpRate {
-  id: string;
-  employee_id: string;
-  employee_name: string | null;
-  cost: string;
-  effective_from: string;
-  created_at: string;
-}
-
-export interface MobitelStaticIpRateCreateInput {
-  employee_id: string;
-  cost: string;
-  effective_from: string;
 }

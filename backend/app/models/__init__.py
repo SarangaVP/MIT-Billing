@@ -6,13 +6,19 @@ from app.models.bill_period import BillPeriod
 from app.models.bill_line_item import BillLineItem
 
 from app.models.mobitel_employee import MobitelEmployee, MobitelEmployeeStatus
-from app.models.mobitel_static_ip_rate import MobitelStaticIpRate
 from app.models.mobitel_bill_period import MobitelBillPeriod
 from app.models.mobitel_bill_line_item import MobitelBillLineItem
 
 __all__ = [
-    "Employee", "EmployeeAuditLog", "MobileNumber", "MobileNumberStatus",
-    "BucketRate", "BillPeriod", "BillLineItem",
-    "MobitelEmployee", "MobitelEmployeeStatus", "MobitelStaticIpRate",
-    "MobitelBillPeriod", "MobitelBillLineItem",
+    "Employee",
+    "EmployeeAuditLog",
+    "MobileNumber",
+    "MobileNumberStatus",
+    "BucketRate",
+    "BillPeriod",
+    "BillLineItem",
+    "MobitelEmployee",
+    "MobitelEmployeeStatus",
+    "MobitelBillPeriod",
+    "MobitelBillLineItem",
 ]

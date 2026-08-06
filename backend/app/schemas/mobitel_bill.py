@@ -34,9 +34,13 @@ class MobitelImportResult(BaseModel):
     users_count: int
     net: Decimal
     per_user_cost: Decimal
-    parsed_total: Decimal
+    parsed_total: Decimal          # sum of all line items' totals
     reconciled: bool
     reconciliation_discrepancy: Decimal
+
+
+class MobitelStaticIpCostUpdateInput(BaseModel):
+    cost: Decimal
 
 
 class MobitelBillLineItemOut(BaseModel):
@@ -50,6 +54,7 @@ class MobitelBillLineItemOut(BaseModel):
     static_ip_cost: Decimal
     total: Decimal
 
+    # Only populated when a Portal sheet was uploaded alongside the PDF
     imsi_number: str | None = None
     data_volume_mb: Decimal | None = None
     available_data_volume_mb: Decimal | None = None

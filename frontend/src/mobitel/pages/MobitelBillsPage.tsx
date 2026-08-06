@@ -1,7 +1,8 @@
 import { useEffect, useState, useCallback } from "react";
 import type { MobitelBillPeriod, MobitelBillLineItemOut } from "../types/mobitel";
-import { listMobitelBillPeriods, getMobitelBillSummary } from "../api/mobitel";
+import { listMobitelBillPeriods, getMobitelBillSummary, setMobitelStaticIpCost } from "../api/mobitel";
 import MobitelBillUploadPanel from "../components/MobitelBillUploadPanel";
+import MobitelStaticIpCostPanel from "../components/MobitelStaticIpCostPanel";
 
 export default function MobitelBillsPage() {
   const [periods, setPeriods] = useState<MobitelBillPeriod[]>([]);
@@ -11,6 +12,7 @@ export default function MobitelBillsPage() {
   const [loadingSummary, setLoadingSummary] = useState(false);
   const [showUpload, setShowUpload] = useState(false);
   const [search, setSearch] = useState("");
+  const [editingStaticIp, setEditingStaticIp] = useState<MobitelBillLineItemOut | null>(null);
 
   const loadPeriods = useCallback(async () => {
     setLoadingPeriods(true);
@@ -32,6 +34,19 @@ export default function MobitelBillsPage() {
       setSummaryRows(await getMobitelBillSummary(period.id));
     } finally {
       setLoadingSummary(false);
+    }
+  }
+
+  async function handleSetStaticIpCost(cost: string) {
+    if (!editingStaticIp) return;
+    const rows = await setMobitelStaticIpCost(editingStaticIp.id, cost);
+    setSummaryRows(rows);
+    setEditingStaticIp(null);
+    // Keep the period-level totals (Net, per-user cost, reconciliation) in sync with the recalculation
+    if (selectedPeriod) {
+      const refreshedPeriods = await listMobitelBillPeriods();
+      const refreshed = refreshedPeriods.find((p) => p.id === selectedPeriod.id);
+      if (refreshed) setSelectedPeriod(refreshed);
     }
   }
 
@@ -99,19 +114,20 @@ export default function MobitelBillsPage() {
                 <th>Data Cost</th>
                 <th>Static IP Cost</th>
                 <th>Total</th>
+                <th></th>
               </tr>
             </thead>
             <tbody>
               {loadingSummary && (
                 <tr>
-                  <td colSpan={hasUsageData ? 13 : 7} className="empty-row">
+                  <td colSpan={hasUsageData ? 14 : 8} className="empty-row">
                     Loading…
                   </td>
                 </tr>
               )}
               {!loadingSummary && filteredRows.length === 0 && (
                 <tr>
-                  <td colSpan={hasUsageData ? 13 : 7} className="empty-row">
+                  <td colSpan={hasUsageData ? 14 : 8} className="empty-row">
                     No rows match.
                   </td>
                 </tr>
@@ -136,11 +152,24 @@ export default function MobitelBillsPage() {
                     <td className="mono">{money(row.data_cost)}</td>
                     <td className="mono">{Number(row.static_ip_cost) > 0 ? money(row.static_ip_cost) : "—"}</td>
                     <td className="mono">{money(row.total)}</td>
+                    <td>
+                      <button className="link-btn" onClick={() => setEditingStaticIp(row)}>
+                        Set static IP
+                      </button>
+                    </td>
                   </tr>
                 ))}
             </tbody>
           </table>
         </div>
+
+        {editingStaticIp && (
+          <MobitelStaticIpCostPanel
+            row={editingStaticIp}
+            onSave={handleSetStaticIpCost}
+            onCancel={() => setEditingStaticIp(null)}
+          />
+        )}
       </div>
     );
   }

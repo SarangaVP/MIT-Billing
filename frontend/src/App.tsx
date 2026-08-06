@@ -4,12 +4,11 @@ import BillsPage from "./pages/BillsPage";
 import SettingsPage from "./pages/SettingsPage";
 import MobitelEmployeesPage from "./mobitel/pages/MobitelEmployeesPage";
 import MobitelBillsPage from "./mobitel/pages/MobitelBillsPage";
-import MobitelSettingsPage from "./mobitel/pages/MobitelSettingsPage";
 import "./App.css";
 
 type Module = "dialog_mobile" | "mobitel_data_bucket";
 type DialogTab = "employees" | "bills" | "settings";
-type MobitelTab = "employees" | "bills" | "settings";
+type MobitelTab = "employees" | "bills";
 
 export default function App() {
   const [module, setModule] = useState<Module>("dialog_mobile");
@@ -67,9 +66,6 @@ export default function App() {
           <span className={`subnav-item ${mobitelTab === "bills" ? "active" : ""}`} onClick={() => setMobitelTab("bills")}>
             Bills
           </span>
-          <span className={`subnav-item ${mobitelTab === "settings" ? "active" : ""}`} onClick={() => setMobitelTab("settings")}>
-            Settings
-          </span>
         </div>
       )}
 
@@ -80,7 +76,6 @@ export default function App() {
 
         {module === "mobitel_data_bucket" && mobitelTab === "employees" && <MobitelEmployeesPage />}
         {module === "mobitel_data_bucket" && mobitelTab === "bills" && <MobitelBillsPage />}
-        {module === "mobitel_data_bucket" && mobitelTab === "settings" && <MobitelSettingsPage />}
       </main>
     </div>
   );
