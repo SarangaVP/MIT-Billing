@@ -47,6 +47,8 @@ export default function MobitelBillsPage() {
 
   const money = (v: string | number | null) =>
     v == null ? "—" : `Rs. ${Number(v).toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
+  const mb = (v: string | number | null) => (v == null ? "—" : `${Number(v).toLocaleString()} Mb`);
+  const hasUsageData = summaryRows.some((r) => r.imsi_number !== null);
 
   if (selectedPeriod) {
     return (
@@ -84,6 +86,16 @@ export default function MobitelBillsPage() {
                 <th>Name</th>
                 <th>Mobile No</th>
                 <th>LOB</th>
+                {hasUsageData && (
+                  <>
+                    <th>IMSI</th>
+                    <th>Data Allocated</th>
+                    <th>Data Available</th>
+                    <th>Data Utilized</th>
+                    <th>Daily Limit</th>
+                    <th>Member Status</th>
+                  </>
+                )}
                 <th>Data Cost</th>
                 <th>Static IP Cost</th>
                 <th>Total</th>
@@ -92,14 +104,14 @@ export default function MobitelBillsPage() {
             <tbody>
               {loadingSummary && (
                 <tr>
-                  <td colSpan={7} className="empty-row">
+                  <td colSpan={hasUsageData ? 13 : 7} className="empty-row">
                     Loading…
                   </td>
                 </tr>
               )}
               {!loadingSummary && filteredRows.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="empty-row">
+                  <td colSpan={hasUsageData ? 13 : 7} className="empty-row">
                     No rows match.
                   </td>
                 </tr>
@@ -111,6 +123,16 @@ export default function MobitelBillsPage() {
                     <td>{row.name}</td>
                     <td className="mono">{row.mobile_no}</td>
                     <td>{row.lob || <span className="muted">—</span>}</td>
+                    {hasUsageData && (
+                      <>
+                        <td className="mono">{row.imsi_number || "—"}</td>
+                        <td className="mono">{mb(row.data_volume_mb)}</td>
+                        <td className="mono">{mb(row.available_data_volume_mb)}</td>
+                        <td className="mono">{mb(row.utilized_data_volume_mb)}</td>
+                        <td className="mono">{mb(row.daily_limit_mb)}</td>
+                        <td>{row.member_status || <span className="muted">—</span>}</td>
+                      </>
+                    )}
                     <td className="mono">{money(row.data_cost)}</td>
                     <td className="mono">{Number(row.static_ip_cost) > 0 ? money(row.static_ip_cost) : "—"}</td>
                     <td className="mono">{money(row.total)}</td>

@@ -44,10 +44,13 @@ export function listMobitelBillPeriods(): Promise<MobitelBillPeriod[]> {
   return request<MobitelBillPeriod[]>("/mobitel/bills");
 }
 
-export async function importMobitelBill(label: string, file: File): Promise<MobitelImportResult> {
+export async function importMobitelBill(label: string, file: File, portalFile?: File | null): Promise<MobitelImportResult> {
   const formData = new FormData();
   formData.append("label", label);
   formData.append("file", file);
+  if (portalFile) {
+    formData.append("portal_file", portalFile);
+  }
 
   const res = await fetch(`${BASE_URL}/mobitel/bills/import`, { method: "POST", body: formData });
   if (!res.ok) {

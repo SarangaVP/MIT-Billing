@@ -6,6 +6,7 @@ from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
 from app.ingestion.mobitel_pdf_parser import parse_mobitel_bill
+from app.ingestion.mobitel_portal_parser import parse_portal_sheet
 from app.models.mobitel_bill_period import MobitelBillPeriod
 from app.models.mobitel_bill_line_item import MobitelBillLineItem
 from app.models.mobitel_employee import MobitelEmployee, MobitelEmployeeStatus
@@ -13,7 +14,7 @@ from app.schemas.mobitel_bill import MobitelImportResult
 from app.services.mobitel_static_ip_service import get_active_static_ip_costs
 
 
-def _resolve_period_dates(bill_date, start_dm, end_dm):
+def _resolve_period_dates(bill_date: date, start_dm: str | None, end_dm: str | None) -> tuple[date | None, date | None]:
     if not start_dm or not end_dm:
         return None, None
     end_day, end_month = (int(x) for x in end_dm.split("/"))
@@ -23,8 +24,9 @@ def _resolve_period_dates(bill_date, start_dm, end_dm):
     return date(start_year, start_month, start_day), date(end_year, end_month, end_day)
 
 
-def import_mobitel_bill(db: Session, pdf_path: str, label: str) -> MobitelImportResult:
+def import_mobitel_bill(db: Session, pdf_path: str, label: str, portal_path: str | None = None) -> MobitelImportResult:
     parsed = parse_mobitel_bill(pdf_path)
+    portal_data = parse_portal_sheet(portal_path) if portal_path else {}
 
     if parsed["bucket"] is None or parsed["vat"] is None:
         raise HTTPException(
@@ -75,10 +77,21 @@ def import_mobitel_bill(db: Session, pdf_path: str, label: str) -> MobitelImport
         total = (per_user_cost + static_ip_cost).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
         line_total += total
 
+        usage = portal_data.get(employee.mobile_no, {})
+
         db.add(MobitelBillLineItem(
             bill_period_id=bill_period.id, employee_id=employee.id,
             data_cost=per_user_cost.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP),
             static_ip_cost=static_ip_cost, total=total,
+            imsi_number=usage.get("imsi_number"),
+            data_volume_mb=usage.get("data_volume_mb"),
+            available_data_volume_mb=usage.get("available_data_volume_mb"),
+            utilized_data_volume_mb=usage.get("utilized_data_volume_mb"),
+            daily_limit_mb=usage.get("daily_limit_mb"),
+            utilized_daily_limit_mb=usage.get("utilized_daily_limit_mb"),
+            member_status=usage.get("member_status"),
+            top_up_mb=usage.get("top_up_mb"),
+            utilized_topup_mb=usage.get("utilized_topup_mb"),
         ))
 
     discrepancy = line_total - net
@@ -122,6 +135,16 @@ def get_summary(db: Session, bill_period_id: uuid.UUID) -> list[dict]:
             "id": li.id, "employee_id": li.employee_id, "emp_no": emp.emp_no, "name": emp.name,
             "lob": emp.lob, "mobile_no": emp.mobile_no, "data_cost": li.data_cost,
             "static_ip_cost": li.static_ip_cost, "total": li.total,
+            "imsi_number": li.imsi_number, "data_volume_mb": li.data_volume_mb,
+            "available_data_volume_mb": li.available_data_volume_mb,
+            "utilized_data_volume_mb": li.utilized_data_volume_mb,
+            "daily_limit_mb": li.daily_limit_mb, "utilized_daily_limit_mb": li.utilized_daily_limit_mb,
+            "member_status": li.member_status, "top_up_mb": li.top_up_mb,
+            "utilized_topup_mb": li.utilized_topup_mb,
         }
         for li, emp in rows
     ]
+
+
+def set_approval_override(db, line_item_id, payload):  # unused placeholder removed if present elsewhere
+    pass

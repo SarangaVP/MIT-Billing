@@ -25,6 +25,7 @@ function money(v: string | number): string {
 export default function MobitelBillUploadPanel({ onImported, onCancel }: Props) {
   const [month, setMonth] = useState(() => new Date().toISOString().slice(0, 7));
   const [file, setFile] = useState<File | null>(null);
+  const [portalFile, setPortalFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<MobitelImportResult | null>(null);
@@ -37,7 +38,7 @@ export default function MobitelBillUploadPanel({ onImported, onCancel }: Props) 
     setUploading(true);
     try {
       const label = monthValueToLabel(month);
-      const res = await importMobitelBill(label, file);
+      const res = await importMobitelBill(label, file, portalFile);
       setResult(res);
       onImported();
     } catch (err) {
@@ -58,10 +59,23 @@ export default function MobitelBillUploadPanel({ onImported, onCancel }: Props) 
         </label>
 
         <label>
-          Bill PDF
+          Bill PDF <span className="field-hint">(required)</span>
           <input type="file" accept="application/pdf,.pdf" required onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
           <span className="field-hint">
             The Mobitel corporate tax invoice PDF. Costs are split across currently active employees automatically.
+          </span>
+        </label>
+
+        <label>
+          Portal sheet <span className="field-hint">(optional)</span>
+          <input
+            type="file"
+            accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            onChange={(e) => setPortalFile(e.target.files?.[0] ?? null)}
+          />
+          <span className="field-hint">
+            The Mobitel "Portal" export (.xlsx) — adds per-SIM usage detail (data volume, daily limit, member status)
+            to this month's summary. Skip if you only want the cost split.
           </span>
         </label>
 

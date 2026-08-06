@@ -50,4 +50,14 @@ class MobitelBillLineItemOut(BaseModel):
     static_ip_cost: Decimal
     total: Decimal
 
+    imsi_number: str | None = None
+    data_volume_mb: Decimal | None = None
+    available_data_volume_mb: Decimal | None = None
+    utilized_data_volume_mb: Decimal | None = None
+    daily_limit_mb: Decimal | None = None
+    utilized_daily_limit_mb: Decimal | None = None
+    member_status: str | None = None
+    top_up_mb: Decimal | None = None
+    utilized_topup_mb: Decimal | None = None
+
     model_config = {"from_attributes": True}

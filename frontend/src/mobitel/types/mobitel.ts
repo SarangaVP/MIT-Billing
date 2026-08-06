@@ -73,6 +73,15 @@ export interface MobitelBillLineItemOut {
   data_cost: string;
   static_ip_cost: string;
   total: string;
+  imsi_number: string | null;
+  data_volume_mb: string | null;
+  available_data_volume_mb: string | null;
+  utilized_data_volume_mb: string | null;
+  daily_limit_mb: string | null;
+  utilized_daily_limit_mb: string | null;
+  member_status: string | null;
+  top_up_mb: string | null;
+  utilized_topup_mb: string | null;
 }
 
 export interface MobitelStaticIpRate {
