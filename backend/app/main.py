@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
 from app.database import Base, engine
-from app.routers import employees, bills, bucket_rates
+from app.routers import employees, bills, bucket_rates, mobitel_employees, mobitel_bills, mobitel_static_ip_rates
 
 app = FastAPI(title="MIT Mobile Billing", version="0.1.0")
 
@@ -18,6 +18,9 @@ app.add_middleware(
 app.include_router(employees.router)
 app.include_router(bills.router)
 app.include_router(bucket_rates.router)
+app.include_router(mobitel_employees.router)
+app.include_router(mobitel_bills.router)
+app.include_router(mobitel_static_ip_rates.router)
 
 
 @app.on_event("startup")
