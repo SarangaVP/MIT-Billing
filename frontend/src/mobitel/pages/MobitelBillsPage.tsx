@@ -44,9 +44,13 @@ export default function MobitelBillsPage() {
     const rows = await setMobitelStaticIpCost(editingStaticIp.id, cost);
     setSummaryRows(rows);
     setEditingStaticIp(null);
-    // Keep the period-level totals (Net, per-user cost, reconciliation) in sync with the recalculation
+    // Keep BOTH the detail view (selectedPeriod) and the main list (periods)
+    // in sync with the recalculation — previously only selectedPeriod was
+    // updated, so going "back" to the list showed a stale reconciliation
+    // value until a manual page refresh.
+    const refreshedPeriods = await listMobitelBillPeriods();
+    setPeriods(refreshedPeriods);
     if (selectedPeriod) {
-      const refreshedPeriods = await listMobitelBillPeriods();
       const refreshed = refreshedPeriods.find((p) => p.id === selectedPeriod.id);
       if (refreshed) setSelectedPeriod(refreshed);
     }
