@@ -289,6 +289,48 @@ tbody tr:hover {
   background: var(--warning-bg);
 }
 
+/* --- Approval select (bills table) --- */
+
+.approval-select {
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-weight: 500;
+  border: 1px solid transparent;
+  cursor: pointer;
+}
+
+.approval-select.approval-ok {
+  color: var(--success);
+  background: var(--success-bg);
+}
+
+.approval-select.approval-attention {
+  color: var(--danger);
+  background: var(--danger-bg);
+}
+
+.approval-select.approval-manager {
+  color: var(--warning);
+  background: var(--warning-bg);
+}
+
+/* Colors the individual rows of the open dropdown list too, so all three
+   options are visually distinct, not just whichever one is currently selected. */
+.approval-option-ok {
+  color: var(--success);
+  background: var(--surface);
+}
+
+.approval-option-attention {
+  color: var(--danger);
+  background: var(--surface);
+}
+
+.approval-option-manager {
+  color: var(--warning);
+  background: var(--surface);
+}
+
 /* --- Row actions --- */
 
 .actions-cell {

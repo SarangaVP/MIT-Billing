@@ -35,14 +35,15 @@ export default function BillsPage() {
     }
   }
 
-  async function handleOverride(row: BillSummaryRow) {
-    const value = prompt(
-      'Override the approval status (e.g. "Manager approved"). Leave blank to clear the override.',
-      row.is_overridden ? row.need_approval : ""
-    );
-    if (value === null) return;
-    const updated = await setApprovalOverride(row.bill_line_item_id, { approval_override: value || null });
+  async function handleApprovalChange(row: BillSummaryRow, value: string) {
+    const updated = await setApprovalOverride(row.bill_line_item_id, { approval_override: value });
     setSummaryRows((rows) => rows.map((r) => (r.bill_line_item_id === updated.bill_line_item_id ? updated : r)));
+  }
+
+  function approvalClass(value: string): string {
+    if (value === "OK") return "approval-ok";
+    if (value === "Need Approval") return "approval-attention";
+    return "approval-manager"; // "Manager approved", or any other override text
   }
 
   const filteredRows = summaryRows.filter((row) => {
@@ -111,20 +112,19 @@ export default function BillsPage() {
                 <th>Total</th>
                 <th>Salary Deduction</th>
                 <th>Need Approval</th>
-                <th></th>
               </tr>
             </thead>
             <tbody>
               {loadingSummary && (
                 <tr>
-                  <td colSpan={hasBreakdown ? 18 : 13} className="empty-row">
+                  <td colSpan={hasBreakdown ? 17 : 12} className="empty-row">
                     Loading…
                   </td>
                 </tr>
               )}
               {!loadingSummary && filteredRows.length === 0 && (
                 <tr>
-                  <td colSpan={hasBreakdown ? 18 : 13} className="empty-row">
+                  <td colSpan={hasBreakdown ? 17 : 12} className="empty-row">
                     No rows match.
                   </td>
                 </tr>
@@ -153,15 +153,19 @@ export default function BillsPage() {
                     <td className="mono">{money(row.total)}</td>
                     <td className="mono">{Number(row.salary_deduction) > 0 ? money(row.salary_deduction) : "—"}</td>
                     <td>
-                      <span className={`pill ${row.need_approval === "OK" ? "pill-active" : "pill-resigned"}`}>
-                        {row.need_approval}
-                      </span>
-                      {row.is_overridden && <span className="field-hint"> (overridden)</span>}
-                    </td>
-                    <td>
-                      <button className="link-btn" onClick={() => handleOverride(row)}>
-                        Override
-                      </button>
+                      <select
+                        className={`mono approval-select ${approvalClass(row.need_approval)}`}
+                        value={row.need_approval}
+                        onChange={(e) => handleApprovalChange(row, e.target.value)}
+                      >
+                        <option value="OK" className="approval-option-ok">OK</option>
+                        <option value="Need Approval" className="approval-option-attention">Need Approval</option>
+                        <option value="Manager approved" className="approval-option-manager">Manager approved</option>
+                        {/* Preserve any other legacy free-text override so the select never shows blank */}
+                        {!["OK", "Need Approval", "Manager approved"].includes(row.need_approval) && (
+                          <option value={row.need_approval}>{row.need_approval}</option>
+                        )}
+                      </select>
                     </td>
                   </tr>
                 ))}
