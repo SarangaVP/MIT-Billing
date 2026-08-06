@@ -145,6 +145,13 @@ def get_bill_period(db: Session, bill_period_id: uuid.UUID) -> BillPeriod:
     return period
 
 
+def delete_bill_period(db: Session, bill_period_id: uuid.UUID) -> None:
+    period = get_bill_period(db, bill_period_id)  # 404 if missing
+    db.query(BillLineItem).filter(BillLineItem.bill_period_id == period.id).delete()
+    db.delete(period)
+    db.commit()
+
+
 def list_bill_periods(db: Session) -> list[BillPeriod]:
     return db.query(BillPeriod).order_by(BillPeriod.bill_period_start.desc().nullslast()).all()
 

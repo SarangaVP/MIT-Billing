@@ -45,3 +45,11 @@ export function setApprovalOverride(lineItemId: string, payload: ApprovalOverrid
     body: JSON.stringify(payload),
   });
 }
+
+export async function deleteBillPeriod(billPeriodId: string): Promise<void> {
+  const res = await fetch(`${BASE_URL}/bills/${billPeriodId}`, { method: "DELETE" });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.detail || `Delete failed (${res.status})`);
+  }
+}

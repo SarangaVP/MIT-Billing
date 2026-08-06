@@ -54,6 +54,11 @@ def get_bill_summary(bill_period_id: uuid.UUID, db: Session = Depends(get_db)):
     return bill_service.get_summary(db, bill_period_id)
 
 
+@router.delete("/{bill_period_id}", status_code=204)
+def delete_bill_period(bill_period_id: uuid.UUID, db: Session = Depends(get_db)):
+    bill_service.delete_bill_period(db, bill_period_id)
+
+
 @router.put("/line-items/{line_item_id}/approval-override", response_model=BillSummaryRow)
 def set_approval_override(line_item_id: uuid.UUID, payload: ApprovalOverrideInput, db: Session = Depends(get_db)):
     return bill_service.set_approval_override(db, line_item_id, payload)

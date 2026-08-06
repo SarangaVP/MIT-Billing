@@ -1,7 +1,8 @@
 import { useEffect, useState, useCallback } from "react";
 import type { BillPeriod, BillSummaryRow } from "../types/bill";
-import { listBillPeriods, getBillSummary, setApprovalOverride } from "../api/bills";
+import { listBillPeriods, getBillSummary, setApprovalOverride, deleteBillPeriod } from "../api/bills";
 import BillUploadPanel from "../components/BillUploadPanel";
+import ConfirmPanel from "../components/ConfirmPanel";
 
 export default function BillsPage() {
   const [periods, setPeriods] = useState<BillPeriod[]>([]);
@@ -11,6 +12,7 @@ export default function BillsPage() {
   const [loadingSummary, setLoadingSummary] = useState(false);
   const [showUpload, setShowUpload] = useState(false);
   const [search, setSearch] = useState("");
+  const [deletingPeriod, setDeletingPeriod] = useState<BillPeriod | null>(null);
 
   const loadPeriods = useCallback(async () => {
     setLoadingPeriods(true);
@@ -44,6 +46,13 @@ export default function BillsPage() {
     if (value === "OK") return "approval-ok";
     if (value === "Need Approval") return "approval-attention";
     return "approval-manager"; // "Manager approved", or any other override text
+  }
+
+  async function handleDeletePeriod() {
+    if (!deletingPeriod) return;
+    await deleteBillPeriod(deletingPeriod.id);
+    setDeletingPeriod(null);
+    loadPeriods();
   }
 
   const filteredRows = summaryRows.filter((row) => {
@@ -237,9 +246,12 @@ export default function BillsPage() {
                       </span>
                     )}
                   </td>
-                  <td>
+                  <td className="actions-cell">
                     <button className="link-btn" onClick={() => openPeriod(p)}>
                       View summary
+                    </button>
+                    <button className="link-btn link-btn-danger" onClick={() => setDeletingPeriod(p)}>
+                      Delete
                     </button>
                   </td>
                 </tr>
@@ -255,6 +267,15 @@ export default function BillsPage() {
             loadPeriods();
           }}
           onCancel={() => setShowUpload(false)}
+        />
+      )}
+
+      {deletingPeriod && (
+        <ConfirmPanel
+          title="Delete this bill?"
+          message={`This removes "${deletingPeriod.label}" and all its line items permanently. This can't be undone.`}
+          onConfirm={handleDeletePeriod}
+          onCancel={() => setDeletingPeriod(null)}
         />
       )}
     </div>
