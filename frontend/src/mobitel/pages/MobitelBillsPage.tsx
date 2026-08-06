@@ -1,0 +1,207 @@
+import { useEffect, useState, useCallback } from "react";
+import type { MobitelBillPeriod, MobitelBillLineItemOut } from "../types/mobitel";
+import { listMobitelBillPeriods, getMobitelBillSummary } from "../api/mobitel";
+import MobitelBillUploadPanel from "../components/MobitelBillUploadPanel";
+
+export default function MobitelBillsPage() {
+  const [periods, setPeriods] = useState<MobitelBillPeriod[]>([]);
+  const [loadingPeriods, setLoadingPeriods] = useState(true);
+  const [selectedPeriod, setSelectedPeriod] = useState<MobitelBillPeriod | null>(null);
+  const [summaryRows, setSummaryRows] = useState<MobitelBillLineItemOut[]>([]);
+  const [loadingSummary, setLoadingSummary] = useState(false);
+  const [showUpload, setShowUpload] = useState(false);
+  const [search, setSearch] = useState("");
+
+  const loadPeriods = useCallback(async () => {
+    setLoadingPeriods(true);
+    try {
+      setPeriods(await listMobitelBillPeriods());
+    } finally {
+      setLoadingPeriods(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadPeriods();
+  }, [loadPeriods]);
+
+  async function openPeriod(period: MobitelBillPeriod) {
+    setSelectedPeriod(period);
+    setLoadingSummary(true);
+    try {
+      setSummaryRows(await getMobitelBillSummary(period.id));
+    } finally {
+      setLoadingSummary(false);
+    }
+  }
+
+  const filteredRows = summaryRows.filter((row) => {
+    if (!search) return true;
+    const pattern = search.toLowerCase();
+    return (
+      (row.mobile_no ?? "").includes(search) ||
+      (row.name ?? "").toLowerCase().includes(pattern) ||
+      (row.emp_no ?? "").toLowerCase().includes(pattern)
+    );
+  });
+
+  const money = (v: string | number | null) =>
+    v == null ? "—" : `Rs. ${Number(v).toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
+
+  if (selectedPeriod) {
+    return (
+      <div className="page">
+        <div className="page-header">
+          <div>
+            <button className="link-btn" onClick={() => setSelectedPeriod(null)} style={{ marginBottom: 8 }}>
+              ← All bill periods
+            </button>
+            <h1>{selectedPeriod.label}</h1>
+            <p className="page-subtitle">
+              Net {money(selectedPeriod.net)} split across {selectedPeriod.users_count} employees at{" "}
+              {money(selectedPeriod.per_user_cost)} each
+              {!selectedPeriod.reconciled && selectedPeriod.reconciliation_discrepancy != null && (
+                <> · off by {money(Math.abs(Number(selectedPeriod.reconciliation_discrepancy)))} (rounding)</>
+              )}
+            </p>
+          </div>
+        </div>
+
+        <div className="toolbar">
+          <input
+            className="search-input"
+            placeholder="Search by name, EMP No, or mobile no…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>EMP No</th>
+                <th>Name</th>
+                <th>Mobile No</th>
+                <th>LOB</th>
+                <th>Data Cost</th>
+                <th>Static IP Cost</th>
+                <th>Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              {loadingSummary && (
+                <tr>
+                  <td colSpan={7} className="empty-row">
+                    Loading…
+                  </td>
+                </tr>
+              )}
+              {!loadingSummary && filteredRows.length === 0 && (
+                <tr>
+                  <td colSpan={7} className="empty-row">
+                    No rows match.
+                  </td>
+                </tr>
+              )}
+              {!loadingSummary &&
+                filteredRows.map((row) => (
+                  <tr key={row.id}>
+                    <td className="mono">{row.emp_no}</td>
+                    <td>{row.name}</td>
+                    <td className="mono">{row.mobile_no}</td>
+                    <td>{row.lob || <span className="muted">—</span>}</td>
+                    <td className="mono">{money(row.data_cost)}</td>
+                    <td className="mono">{Number(row.static_ip_cost) > 0 ? money(row.static_ip_cost) : "—"}</td>
+                    <td className="mono">{money(row.total)}</td>
+                  </tr>
+                ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="page">
+      <div className="page-header">
+        <div>
+          <h1>Mobitel Bills</h1>
+          <p className="page-subtitle">
+            Mobitel data bucket bill has no per-employee breakdown — the app splits it across active employees.
+          </p>
+        </div>
+        <button className="btn btn-primary" onClick={() => setShowUpload(true)}>
+          + Upload bill
+        </button>
+      </div>
+
+      <div className="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Month</th>
+              <th>Bill Period</th>
+              <th>Net</th>
+              <th>Users</th>
+              <th>Reconciliation</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {loadingPeriods && (
+              <tr>
+                <td colSpan={6} className="empty-row">
+                  Loading…
+                </td>
+              </tr>
+            )}
+            {!loadingPeriods && periods.length === 0 && (
+              <tr>
+                <td colSpan={6} className="empty-row">
+                  No bills imported yet.
+                </td>
+              </tr>
+            )}
+            {!loadingPeriods &&
+              periods.map((p) => (
+                <tr key={p.id}>
+                  <td>{p.label}</td>
+                  <td className="mono">
+                    {p.period_start ?? "—"} — {p.period_end ?? "—"}
+                  </td>
+                  <td className="mono">{money(p.net)}</td>
+                  <td className="mono">{p.users_count ?? "—"}</td>
+                  <td>
+                    {p.reconciled ? (
+                      <span className="pill pill-active">Matched</span>
+                    ) : (
+                      <span className="pill pill-resigned">
+                        Off by {money(Math.abs(Number(p.reconciliation_discrepancy ?? 0)))}
+                      </span>
+                    )}
+                  </td>
+                  <td>
+                    <button className="link-btn" onClick={() => openPeriod(p)}>
+                      View summary
+                    </button>
+                  </td>
+                </tr>
+              ))}
+          </tbody>
+        </table>
+      </div>
+
+      {showUpload && (
+        <MobitelBillUploadPanel
+          onImported={() => {
+            setShowUpload(false);
+            loadPeriods();
+          }}
+          onCancel={() => setShowUpload(false)}
+        />
+      )}
+    </div>
+  );
+}

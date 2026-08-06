@@ -2,12 +2,19 @@ import { useState } from "react";
 import EmployeesPage from "./pages/EmployeesPage";
 import BillsPage from "./pages/BillsPage";
 import SettingsPage from "./pages/SettingsPage";
+import MobitelEmployeesPage from "./mobitel/pages/MobitelEmployeesPage";
+import MobitelBillsPage from "./mobitel/pages/MobitelBillsPage";
+import MobitelSettingsPage from "./mobitel/pages/MobitelSettingsPage";
 import "./App.css";
 
-type Tab = "employees" | "bills" | "settings";
+type Module = "dialog_mobile" | "mobitel_data_bucket";
+type DialogTab = "employees" | "bills" | "settings";
+type MobitelTab = "employees" | "bills" | "settings";
 
 export default function App() {
-  const [tab, setTab] = useState<Tab>("employees");
+  const [module, setModule] = useState<Module>("dialog_mobile");
+  const [dialogTab, setDialogTab] = useState<DialogTab>("employees");
+  const [mobitelTab, setMobitelTab] = useState<MobitelTab>("employees");
 
   return (
     <div className="shell">
@@ -17,24 +24,63 @@ export default function App() {
           <span className="brand-name">Mobile Billing</span>
         </div>
         <nav className="topnav">
-          <span className={`topnav-item ${tab === "employees" ? "active" : ""}`} onClick={() => setTab("employees")}>
-            Employees
+          <span
+            className={`topnav-item ${module === "dialog_mobile" ? "active" : ""}`}
+            onClick={() => setModule("dialog_mobile")}
+          >
+            Dialog Mobile
           </span>
-          <span className={`topnav-item ${tab === "bills" ? "active" : ""}`} onClick={() => setTab("bills")}>
-            Bills
+          <span
+            className={`topnav-item ${module === "mobitel_data_bucket" ? "active" : ""}`}
+            onClick={() => setModule("mobitel_data_bucket")}
+          >
+            Mobitel Data Bucket
           </span>
           <span className="topnav-item disabled" title="Coming next">
-            Allocations
+            Dialog Data Bucket
           </span>
-          <span className={`topnav-item ${tab === "settings" ? "active" : ""}`} onClick={() => setTab("settings")}>
-            Settings
+          <span className="topnav-item disabled" title="Coming next">
+            SLT
           </span>
         </nav>
       </header>
+
+      {module === "dialog_mobile" && (
+        <div className="subnav">
+          <span className={`subnav-item ${dialogTab === "employees" ? "active" : ""}`} onClick={() => setDialogTab("employees")}>
+            Employees
+          </span>
+          <span className={`subnav-item ${dialogTab === "bills" ? "active" : ""}`} onClick={() => setDialogTab("bills")}>
+            Bills
+          </span>
+          <span className={`subnav-item ${dialogTab === "settings" ? "active" : ""}`} onClick={() => setDialogTab("settings")}>
+            Settings
+          </span>
+        </div>
+      )}
+
+      {module === "mobitel_data_bucket" && (
+        <div className="subnav">
+          <span className={`subnav-item ${mobitelTab === "employees" ? "active" : ""}`} onClick={() => setMobitelTab("employees")}>
+            Employees
+          </span>
+          <span className={`subnav-item ${mobitelTab === "bills" ? "active" : ""}`} onClick={() => setMobitelTab("bills")}>
+            Bills
+          </span>
+          <span className={`subnav-item ${mobitelTab === "settings" ? "active" : ""}`} onClick={() => setMobitelTab("settings")}>
+            Settings
+          </span>
+        </div>
+      )}
+
       <main className="content">
-        {tab === "employees" && <EmployeesPage />}
-        {tab === "bills" && <BillsPage />}
-        {tab === "settings" && <SettingsPage />}
+        {module === "dialog_mobile" && dialogTab === "employees" && <EmployeesPage />}
+        {module === "dialog_mobile" && dialogTab === "bills" && <BillsPage />}
+        {module === "dialog_mobile" && dialogTab === "settings" && <SettingsPage />}
+
+        {module === "mobitel_data_bucket" && mobitelTab === "employees" && <MobitelEmployeesPage />}
+        {module === "mobitel_data_bucket" && mobitelTab === "bills" && <MobitelBillsPage />}
+        {module === "mobitel_data_bucket" && mobitelTab === "settings" && <MobitelSettingsPage />}
       </main>
     </div>
   );
