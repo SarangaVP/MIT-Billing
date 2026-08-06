@@ -178,10 +178,10 @@ export default function DialogDataBillsPage() {
                 <th>Connection No</th>
                 {hasUsageData && (
                   <>
-                    <th>Allocation</th>
-                    <th>Usage</th>
-                    <th>Remaining</th>
-                    <th>Status</th>
+                    <th>Allocation GB</th>
+                    <th>Usage GB</th>
+                    <th>Remaining GB</th>
+                    <th>Pay Go Status</th>
                   </>
                 )}
                 <th>Cost</th>
