@@ -118,6 +118,13 @@ def get_bill_period(db: Session, bill_period_id: uuid.UUID) -> MobitelBillPeriod
     return period
 
 
+def delete_bill_period(db: Session, bill_period_id: uuid.UUID) -> None:
+    period = get_bill_period(db, bill_period_id)  # 404 if missing
+    db.query(MobitelBillLineItem).filter(MobitelBillLineItem.bill_period_id == period.id).delete()
+    db.delete(period)
+    db.commit()
+
+
 def get_summary(db: Session, bill_period_id: uuid.UUID) -> list[dict]:
     get_bill_period(db, bill_period_id)
     rows = (

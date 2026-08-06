@@ -1,8 +1,9 @@
 import { useEffect, useState, useCallback } from "react";
 import type { MobitelBillPeriod, MobitelBillLineItemOut } from "../types/mobitel";
-import { listMobitelBillPeriods, getMobitelBillSummary, setMobitelStaticIpCost } from "../api/mobitel";
+import { listMobitelBillPeriods, getMobitelBillSummary, setMobitelStaticIpCost, deleteMobitelBillPeriod } from "../api/mobitel";
 import MobitelBillUploadPanel from "../components/MobitelBillUploadPanel";
 import MobitelStaticIpCostPanel from "../components/MobitelStaticIpCostPanel";
+import MobitelConfirmPanel from "../components/MobitelConfirmPanel";
 
 export default function MobitelBillsPage() {
   const [periods, setPeriods] = useState<MobitelBillPeriod[]>([]);
@@ -13,6 +14,7 @@ export default function MobitelBillsPage() {
   const [showUpload, setShowUpload] = useState(false);
   const [search, setSearch] = useState("");
   const [editingStaticIp, setEditingStaticIp] = useState<MobitelBillLineItemOut | null>(null);
+  const [deletingPeriod, setDeletingPeriod] = useState<MobitelBillPeriod | null>(null);
 
   const loadPeriods = useCallback(async () => {
     setLoadingPeriods(true);
@@ -48,6 +50,13 @@ export default function MobitelBillsPage() {
       const refreshed = refreshedPeriods.find((p) => p.id === selectedPeriod.id);
       if (refreshed) setSelectedPeriod(refreshed);
     }
+  }
+
+  async function handleDeletePeriod() {
+    if (!deletingPeriod) return;
+    await deleteMobitelBillPeriod(deletingPeriod.id);
+    setDeletingPeriod(null);
+    loadPeriods();
   }
 
   const filteredRows = summaryRows.filter((row) => {
@@ -233,9 +242,12 @@ export default function MobitelBillsPage() {
                       </span>
                     )}
                   </td>
-                  <td>
+                  <td className="actions-cell">
                     <button className="link-btn" onClick={() => openPeriod(p)}>
                       View summary
+                    </button>
+                    <button className="link-btn link-btn-danger" onClick={() => setDeletingPeriod(p)}>
+                      Delete
                     </button>
                   </td>
                 </tr>
@@ -251,6 +263,15 @@ export default function MobitelBillsPage() {
             loadPeriods();
           }}
           onCancel={() => setShowUpload(false)}
+        />
+      )}
+
+      {deletingPeriod && (
+        <MobitelConfirmPanel
+          title="Delete this bill?"
+          message={`This removes "${deletingPeriod.label}" and all ${deletingPeriod.users_count ?? ""} line items permanently. This can't be undone.`}
+          onConfirm={handleDeletePeriod}
+          onCancel={() => setDeletingPeriod(null)}
         />
       )}
     </div>

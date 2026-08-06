@@ -48,6 +48,11 @@ def get_bill_summary(bill_period_id: uuid.UUID, db: Session = Depends(get_db)):
     return mobitel_bill_service.get_summary(db, bill_period_id)
 
 
+@router.delete("/{bill_period_id}", status_code=204)
+def delete_bill_period(bill_period_id: uuid.UUID, db: Session = Depends(get_db)):
+    mobitel_bill_service.delete_bill_period(db, bill_period_id)
+
+
 @router.put("/line-items/{line_item_id}/static-ip-cost")
 def update_static_ip_cost(line_item_id: uuid.UUID, payload: MobitelStaticIpCostUpdateInput, db: Session = Depends(get_db)):
     """Sets this line item's static IP cost and recalculates the whole bill period's split."""

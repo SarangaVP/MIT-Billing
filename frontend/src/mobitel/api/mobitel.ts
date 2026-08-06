@@ -75,3 +75,12 @@ export function setMobitelStaticIpCost(lineItemId: string, cost: string): Promis
     body: JSON.stringify({ cost }),
   });
 }
+
+
+export async function deleteMobitelBillPeriod(billPeriodId: string): Promise<void> {
+  const res = await fetch(`${BASE_URL}/mobitel/bills/${billPeriodId}`, { method: "DELETE" });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.detail || `Delete failed (${res.status})`);
+  }
+}
