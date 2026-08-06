@@ -107,8 +107,12 @@ export default function MobitelEmployeesPage() {
                   <td className="mono">{emp.mobile_no}</td>
                   <td>{emp.lob || <span className="muted">—</span>}</td>
                   <td>
-                    <span className={`pill ${emp.status === "active" ? "pill-active" : "pill-resigned"}`}>
-                      {emp.status === "active" ? "Active" : "Inactive"}
+                    <span
+                      className={`pill ${
+                        emp.status === "active" ? "pill-active" : emp.status === "pool" ? "pill-transferred" : "pill-resigned"
+                      }`}
+                    >
+                      {emp.status === "active" ? "Active" : emp.status === "pool" ? "Pool (unassigned)" : "Inactive"}
                     </span>
                   </td>
                   <td className="actions-cell">

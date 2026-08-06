@@ -2,7 +2,7 @@
 // NOTE: numeric fields are `string` — FastAPI/Pydantic serializes Decimal as
 // a JSON string, not a number. Always Number(v) before arithmetic.
 
-export type MobitelEmployeeStatus = "active" | "inactive";
+export type MobitelEmployeeStatus = "active" | "inactive" | "pool";
 
 export interface MobitelEmployee {
   id: string;

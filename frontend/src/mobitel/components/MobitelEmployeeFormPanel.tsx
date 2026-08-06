@@ -12,7 +12,7 @@ interface FormState {
   name: string;
   mobile_no: string;
   lob: string;
-  status: "active" | "inactive";
+  status: "active" | "inactive" | "pool";
 }
 
 const EMPTY: FormState = { emp_no: "", name: "", mobile_no: "", lob: "", status: "active" };
@@ -64,7 +64,12 @@ export default function MobitelEmployeeFormPanel({ employee, onSave, onCancel }:
 
         <label>
           EMP No
-          <input required disabled={isEdit} value={form.emp_no} onChange={(e) => update("emp_no", e.target.value)} />
+          <input required value={form.emp_no} onChange={(e) => update("emp_no", e.target.value)} />
+          {isEdit && (
+            <span className="field-hint">
+              Editable — e.g. to promote a "Pool" line to a real employee, give it a real EMP No here.
+            </span>
+          )}
         </label>
 
         <label>
@@ -85,11 +90,12 @@ export default function MobitelEmployeeFormPanel({ employee, onSave, onCancel }:
         {isEdit && (
           <label>
             Status
-            <select value={form.status} onChange={(e) => update("status", e.target.value as "active" | "inactive")}>
+            <select value={form.status} onChange={(e) => update("status", e.target.value as "active" | "inactive" | "pool")}>
               <option value="active">Active</option>
               <option value="inactive">Inactive</option>
+              <option value="pool">Pool (unassigned)</option>
             </select>
-            <span className="field-hint">Inactive employees are excluded from the next bill split.</span>
+            <span className="field-hint">Only "Active" employees are included in the next bill split.</span>
           </label>
         )}
 

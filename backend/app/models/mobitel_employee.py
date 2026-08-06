@@ -10,6 +10,7 @@ from app.types import GUID
 class MobitelEmployeeStatus(str, enum.Enum):
     active = "active"      # currently holds a billed data bucket line
     inactive = "inactive"   # line removed/suspended, but kept for history
+    pool = "pool"           # unassigned SIM, not held by any real person — never billed
 
 
 class MobitelEmployee(Base):
@@ -32,6 +33,9 @@ class MobitelEmployee(Base):
     mobile_no = Column(String, unique=True, nullable=False, index=True)
     lob = Column(String, nullable=True)
 
+    # Only "active" employees are included when splitting a month's Net
+    # cost. "pool" rows (unassigned SIMs) are imported and shown for
+    # visibility, but the bill service always excludes them.
     status = Column(Enum(MobitelEmployeeStatus), nullable=False, default=MobitelEmployeeStatus.active)
     is_deleted = Column(Boolean, nullable=False, default=False)
 
