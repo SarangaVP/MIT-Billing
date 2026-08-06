@@ -442,6 +442,31 @@ tbody tr:hover {
   font-weight: 400;
 }
 
+.field-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.field-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-h);
+}
+
+.inline-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.inline-row input {
+  flex: 1;
+}
+
 .form-error {
   color: var(--danger);
   font-size: 13px;

@@ -4,16 +4,20 @@ import BillsPage from "./pages/BillsPage";
 import SettingsPage from "./pages/SettingsPage";
 import MobitelEmployeesPage from "./mobitel/pages/MobitelEmployeesPage";
 import MobitelBillsPage from "./mobitel/pages/MobitelBillsPage";
+import DialogDataEmployeesPage from "./dialog-data/pages/DialogDataEmployeesPage";
+import DialogDataBillsPage from "./dialog-data/pages/DialogDataBillsPage";
 import "./App.css";
 
-type Module = "dialog_mobile" | "mobitel_data_bucket";
+type Module = "dialog_mobile" | "mobitel_data_bucket" | "dialog_data_bucket";
 type DialogTab = "employees" | "bills" | "settings";
 type MobitelTab = "employees" | "bills";
+type DialogDataTab = "employees" | "bills";
 
 export default function App() {
   const [module, setModule] = useState<Module>("dialog_mobile");
   const [dialogTab, setDialogTab] = useState<DialogTab>("employees");
   const [mobitelTab, setMobitelTab] = useState<MobitelTab>("employees");
+  const [dialogDataTab, setDialogDataTab] = useState<DialogDataTab>("employees");
 
   return (
     <div className="shell">
@@ -35,7 +39,10 @@ export default function App() {
           >
             Mobitel Data Bucket
           </span>
-          <span className="topnav-item disabled" title="Coming next">
+          <span
+            className={`topnav-item ${module === "dialog_data_bucket" ? "active" : ""}`}
+            onClick={() => setModule("dialog_data_bucket")}
+          >
             Dialog Data Bucket
           </span>
           <span className="topnav-item disabled" title="Coming next">
@@ -69,6 +76,17 @@ export default function App() {
         </div>
       )}
 
+      {module === "dialog_data_bucket" && (
+        <div className="subnav">
+          <span className={`subnav-item ${dialogDataTab === "employees" ? "active" : ""}`} onClick={() => setDialogDataTab("employees")}>
+            Employees
+          </span>
+          <span className={`subnav-item ${dialogDataTab === "bills" ? "active" : ""}`} onClick={() => setDialogDataTab("bills")}>
+            Bills
+          </span>
+        </div>
+      )}
+
       <main className="content">
         {module === "dialog_mobile" && dialogTab === "employees" && <EmployeesPage />}
         {module === "dialog_mobile" && dialogTab === "bills" && <BillsPage />}
@@ -76,6 +94,9 @@ export default function App() {
 
         {module === "mobitel_data_bucket" && mobitelTab === "employees" && <MobitelEmployeesPage />}
         {module === "mobitel_data_bucket" && mobitelTab === "bills" && <MobitelBillsPage />}
+
+        {module === "dialog_data_bucket" && dialogDataTab === "employees" && <DialogDataEmployeesPage />}
+        {module === "dialog_data_bucket" && dialogDataTab === "bills" && <DialogDataBillsPage />}
       </main>
     </div>
   );
