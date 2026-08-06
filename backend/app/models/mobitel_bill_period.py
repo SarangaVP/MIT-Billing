@@ -38,4 +38,8 @@ class MobitelBillPeriod(Base):
     reconciled = Column(Boolean, nullable=False, default=True)
     reconciliation_discrepancy = Column(Numeric(14, 2), nullable=True)
 
+    extraction_method = Column(String, nullable=False, default="regex_fallback")
+
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    

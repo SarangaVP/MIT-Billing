@@ -1,3 +1,4 @@
+import logging
 import uuid
 from datetime import date, datetime
 from decimal import Decimal, ROUND_HALF_UP
@@ -5,32 +6,74 @@ from decimal import Decimal, ROUND_HALF_UP
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.ingestion.mobitel_pdf_parser import parse_mobitel_bill
+from app.ingestion.gemini_pdf_extractor import extract_via_gemini
 from app.ingestion.mobitel_portal_parser import parse_portal_sheet
 from app.models.mobitel_bill_period import MobitelBillPeriod
 from app.models.mobitel_bill_line_item import MobitelBillLineItem
 from app.models.mobitel_employee import MobitelEmployee, MobitelEmployeeStatus
 from app.schemas.mobitel_bill import MobitelImportResult
 
+logger = logging.getLogger(__name__)
+
 
 def _resolve_period_dates(bill_date: date, start_dm: str | None, end_dm: str | None) -> tuple[date | None, date | None]:
+    """
+    The bill only gives period dates as 'DD/MM' with no year. Anchors the
+    year using bill_date, handling the one edge case where the period
+    starts in the December of the previous year (e.g. bill in Jan, period
+    starts in Dec).
+    """
     if not start_dm or not end_dm:
         return None, None
+
     end_day, end_month = (int(x) for x in end_dm.split("/"))
     start_day, start_month = (int(x) for x in start_dm.split("/"))
+
     end_year = bill_date.year
     start_year = bill_date.year if start_month <= end_month else bill_date.year - 1
+
     return date(start_year, start_month, start_day), date(end_year, end_month, end_day)
 
 
+def _extract_bill_fields(pdf_path: str) -> tuple[dict, str]:
+    """
+    Gemini is the PRIMARY extraction method — it reads the actual PDF
+    content directly, so it keeps working even if Mobitel changes the
+    bill's wording or layout, unlike the regex parser. Falls back to the
+    regex parser automatically if Gemini raises for any reason (missing/
+    invalid API key, network error, rate limit, malformed response) or
+    returns incomplete data (missing bucket/vat).
+
+    Returns (parsed_fields, extraction_method) so the caller can always
+    record which method actually produced a given bill's numbers.
+    """
+    if settings.gemini_api_key:
+        try:
+            parsed = extract_via_gemini(pdf_path, settings.gemini_api_key)
+            if parsed.get("bucket") is not None and parsed.get("vat") is not None:
+                return parsed, "gemini"
+            logger.warning("Gemini extraction returned incomplete data (missing bucket/vat) — falling back to regex")
+        except Exception:
+            logger.exception("Gemini extraction failed — falling back to regex parser")
+    else:
+        logger.info("No GEMINI_API_KEY configured — using regex parser directly")
+
+    return parse_mobitel_bill(pdf_path), "regex_fallback"
+
+
 def import_mobitel_bill(db: Session, pdf_path: str, label: str, portal_path: str | None = None) -> MobitelImportResult:
-    parsed = parse_mobitel_bill(pdf_path)
+    parsed, extraction_method = _extract_bill_fields(pdf_path)
     portal_data = parse_portal_sheet(portal_path) if portal_path else {}
 
     if parsed["bucket"] is None or parsed["vat"] is None:
         raise HTTPException(
             status_code=422,
-            detail="Could not find 'Total Charge for the Month' or 'VAT' in this PDF — check the file format",
+            detail=(
+                "Could not find 'Total Charge for the Month' or 'VAT' in this PDF, even after trying both "
+                "AI and regex extraction — check the file format"
+            ),
         )
 
     bucket = Decimal(str(parsed["bucket"]))
@@ -41,7 +84,8 @@ def import_mobitel_bill(db: Session, pdf_path: str, label: str, portal_path: str
     due_date = datetime.strptime(parsed["due_date"], "%d/%m/%Y").date() if parsed["due_date"] else None
     period_start, period_end = (
         _resolve_period_dates(bill_date, parsed["period_start_dm"], parsed["period_end_dm"])
-        if bill_date else (None, None)
+        if bill_date
+        else (None, None)
     )
 
     active_employees = (
@@ -60,12 +104,21 @@ def import_mobitel_bill(db: Session, pdf_path: str, label: str, portal_path: str
     per_user_cost = (net / users).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
 
     bill_period = MobitelBillPeriod(
-        label=label, bill_no=parsed["bill_no"], account_no=parsed["account_no"],
-        bill_date=bill_date, due_date=due_date, period_start=period_start, period_end=period_end,
+        label=label,
+        bill_no=parsed["bill_no"],
+        account_no=parsed["account_no"],
+        bill_date=bill_date,
+        due_date=due_date,
+        period_start=period_start,
+        period_end=period_end,
         arrears=Decimal(str(parsed["arrears"])) if parsed["arrears"] is not None else None,
-        bucket_total=bucket, vat=vat, net=net,
+        bucket_total=bucket,
+        vat=vat,
+        net=net,
         total_payable=Decimal(str(parsed["total_payable"])) if parsed["total_payable"] is not None else None,
-        users_count=users, per_user_cost=per_user_cost,
+        users_count=users,
+        per_user_cost=per_user_cost,
+        extraction_method=extraction_method,
     )
     db.add(bill_period)
     db.flush()
@@ -78,8 +131,11 @@ def import_mobitel_bill(db: Session, pdf_path: str, label: str, portal_path: str
         usage = portal_data.get(employee.mobile_no, {})
 
         db.add(MobitelBillLineItem(
-            bill_period_id=bill_period.id, employee_id=employee.id,
-            data_cost=data_cost, static_ip_cost=Decimal("0"), total=data_cost,
+            bill_period_id=bill_period.id,
+            employee_id=employee.id,
+            data_cost=data_cost,
+            static_ip_cost=Decimal("0"),
+            total=data_cost,
             imsi_number=usage.get("imsi_number"),
             data_volume_mb=usage.get("data_volume_mb"),
             available_data_volume_mb=usage.get("available_data_volume_mb"),
@@ -101,9 +157,15 @@ def import_mobitel_bill(db: Session, pdf_path: str, label: str, portal_path: str
     db.refresh(bill_period)
 
     return MobitelImportResult(
-        bill_period_id=bill_period.id, line_items_created=users, users_count=users,
-        net=net, per_user_cost=per_user_cost, parsed_total=line_total,
-        reconciled=reconciled, reconciliation_discrepancy=discrepancy,
+        bill_period_id=bill_period.id,
+        line_items_created=users,
+        users_count=users,
+        net=net,
+        per_user_cost=per_user_cost,
+        parsed_total=line_total,
+        reconciled=reconciled,
+        reconciliation_discrepancy=discrepancy,
+        extraction_method=extraction_method,
     )
 
 
@@ -126,7 +188,7 @@ def delete_bill_period(db: Session, bill_period_id: uuid.UUID) -> None:
 
 
 def get_summary(db: Session, bill_period_id: uuid.UUID) -> list[dict]:
-    get_bill_period(db, bill_period_id)
+    get_bill_period(db, bill_period_id)  # 404 if missing
     rows = (
         db.query(MobitelBillLineItem, MobitelEmployee)
         .join(MobitelEmployee, MobitelEmployee.id == MobitelBillLineItem.employee_id)
@@ -136,14 +198,23 @@ def get_summary(db: Session, bill_period_id: uuid.UUID) -> list[dict]:
     )
     return [
         {
-            "id": li.id, "employee_id": li.employee_id, "emp_no": emp.emp_no, "name": emp.name,
-            "lob": emp.lob, "mobile_no": emp.mobile_no, "data_cost": li.data_cost,
-            "static_ip_cost": li.static_ip_cost, "total": li.total,
-            "imsi_number": li.imsi_number, "data_volume_mb": li.data_volume_mb,
+            "id": li.id,
+            "employee_id": li.employee_id,
+            "emp_no": emp.emp_no,
+            "name": emp.name,
+            "lob": emp.lob,
+            "mobile_no": emp.mobile_no,
+            "data_cost": li.data_cost,
+            "static_ip_cost": li.static_ip_cost,
+            "total": li.total,
+            "imsi_number": li.imsi_number,
+            "data_volume_mb": li.data_volume_mb,
             "available_data_volume_mb": li.available_data_volume_mb,
             "utilized_data_volume_mb": li.utilized_data_volume_mb,
-            "daily_limit_mb": li.daily_limit_mb, "utilized_daily_limit_mb": li.utilized_daily_limit_mb,
-            "member_status": li.member_status, "top_up_mb": li.top_up_mb,
+            "daily_limit_mb": li.daily_limit_mb,
+            "utilized_daily_limit_mb": li.utilized_daily_limit_mb,
+            "member_status": li.member_status,
+            "top_up_mb": li.top_up_mb,
             "utilized_topup_mb": li.utilized_topup_mb,
         }
         for li, emp in rows

@@ -23,8 +23,9 @@ class MobitelBillPeriodOut(BaseModel):
     per_user_cost: Decimal | None
     reconciled: bool
     reconciliation_discrepancy: Decimal | None
+    extraction_method: str
     created_at: datetime
-
+    extraction_method: str
     model_config = {"from_attributes": True}
 
 
@@ -37,6 +38,7 @@ class MobitelImportResult(BaseModel):
     parsed_total: Decimal          # sum of all line items' totals
     reconciled: bool
     reconciliation_discrepancy: Decimal
+    extraction_method: str
 
 
 class MobitelStaticIpCostUpdateInput(BaseModel):

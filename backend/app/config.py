@@ -13,6 +13,7 @@ class Settings(BaseSettings):
 
     database_url: str = "postgresql://postgres:postgres@localhost:5432/mit_mobile_billing"
     openai_api_key: str | None = None
+    gemini_api_key: str | None = None
     frontend_origin: str = "http://localhost:5173"
 
     model_config = SettingsConfigDict(env_file=ENV_FILE, extra="ignore")
