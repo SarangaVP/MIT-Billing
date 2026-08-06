@@ -15,6 +15,7 @@ export default function MobitelBillsPage() {
   const [search, setSearch] = useState("");
   const [editingStaticIp, setEditingStaticIp] = useState<MobitelBillLineItemOut | null>(null);
   const [deletingPeriod, setDeletingPeriod] = useState<MobitelBillPeriod | null>(null);
+  const [showBreakdown, setShowBreakdown] = useState(false);
 
   const loadPeriods = useCallback(async () => {
     setLoadingPeriods(true);
@@ -78,6 +79,26 @@ export default function MobitelBillsPage() {
   const mb = (v: string | number | null) => (v == null ? "—" : `${Number(v).toLocaleString()} Mb`);
   const hasUsageData = summaryRows.some((r) => r.imsi_number !== null);
 
+  // "Team cost" breakdown — groups every employee's Total by LOB, same as
+  // the source Excel's own "Team cost" sheet (verified to reproduce it
+  // exactly, aside from one known Rs. 0.34 manual-correction anomaly that
+  // existed in the original sheet itself).
+  const teamCostRows = Object.entries(
+    summaryRows.reduce<Record<string, number>>((acc, row) => {
+      const team = row.lob || "Unassigned";
+      acc[team] = (acc[team] || 0) + Number(row.total);
+      return acc;
+    }, {})
+  )
+    .map(([team, cost]) => ({ team, cost }))
+    .sort((a, b) => a.team.localeCompare(b.team));
+  const teamCostTotal = teamCostRows.reduce((sum, r) => sum + r.cost, 0);
+
+  // "PDF vs Calculated" reconciliation — the PDF's own stated figures next
+  // to what we actually computed and summed, so a mismatch is visible at a
+  // glance rather than only available as a single "off by Rs. X" pill.
+  const sumOfLineItems = summaryRows.reduce((sum, r) => sum + Number(r.total), 0);
+
   if (selectedPeriod) {
     return (
       <div className="page">
@@ -95,7 +116,73 @@ export default function MobitelBillsPage() {
               )}
             </p>
           </div>
+          <button className="btn btn-ghost" onClick={() => setShowBreakdown((v) => !v)}>
+            {showBreakdown ? "Hide" : "Show"} team cost & reconciliation
+          </button>
         </div>
+
+        {showBreakdown && (
+          <div style={{ display: "flex", gap: 20, marginBottom: 20, flexWrap: "wrap" }}>
+            <div className="table-wrap" style={{ flex: "1 1 320px" }}>
+              <table>
+                <thead>
+                  <tr>
+                    <th colSpan={2}>PDF vs Calculated</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>Bucket Total (PDF)</td>
+                    <td className="mono">{money(selectedPeriod.bucket_total)}</td>
+                  </tr>
+                  <tr>
+                    <td>VAT (PDF)</td>
+                    <td className="mono">{money(selectedPeriod.vat)}</td>
+                  </tr>
+                  <tr>
+                    <td>Net (Bucket − VAT)</td>
+                    <td className="mono">{money(selectedPeriod.net)}</td>
+                  </tr>
+                  <tr>
+                    <td>Sum of line items (calculated)</td>
+                    <td className="mono">{money(sumOfLineItems)}</td>
+                  </tr>
+                  <tr>
+                    <td>Difference</td>
+                    <td className="mono" style={{ color: Math.abs(sumOfLineItems - Number(selectedPeriod.net || 0)) < 0.01 ? "var(--success)" : "var(--danger)" }}>
+                      {money(sumOfLineItems - Number(selectedPeriod.net || 0))}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div className="table-wrap" style={{ flex: "1 1 320px" }}>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Team</th>
+                    <th>Cost</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {teamCostRows.map((r) => (
+                    <tr key={r.team}>
+                      <td>{r.team}</td>
+                      <td className="mono">{money(r.cost)}</td>
+                    </tr>
+                  ))}
+                  <tr>
+                    <td style={{ fontWeight: 600 }}>Grand Total</td>
+                    <td className="mono" style={{ fontWeight: 600 }}>
+                      {money(teamCostTotal)}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
 
         <div className="toolbar">
           <input
