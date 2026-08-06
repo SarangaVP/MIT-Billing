@@ -18,7 +18,7 @@ class BucketRate(Base):
     effective on its date.
     """
 
-    __tablename__ = "bucket_rates"
+    __tablename__ = "dialog_mobile_bucket_rates"
 
     id = Column(GUID, primary_key=True, default=uuid.uuid4)
     cost = Column(Numeric(12, 2), nullable=False)

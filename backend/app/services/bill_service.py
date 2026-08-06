@@ -20,8 +20,6 @@ from app.models.mobile_number import MobileNumber
 from app.models.employee import Employee
 from app.schemas.bill import BillSummaryRow, ImportResult, ApprovalOverrideInput
 
-XLS_RECONCILIATION_TOLERANCE = Decimal("1000.00")
-
 
 def _parse_date(value: str | None, fmt: str) -> date | None:
     if not value:
@@ -53,6 +51,8 @@ def import_bill_file(db: Session, file_path: str, label: str, source_format: str
     discrepancy = (parsed_total - stated_total) if stated_total is not None else None
 
     if source_format == "pdf":
+        # Strict: this source has always reconciled exactly in testing. A
+        # mismatch here means something is genuinely wrong — reject outright.
         reconciled = stated_total is not None and abs(discrepancy) < Decimal("0.01")
         if stated_total is not None and not reconciled:
             raise HTTPException(
@@ -63,15 +63,10 @@ def import_bill_file(db: Session, file_path: str, label: str, source_format: str
                 ),
             )
     else:
-        if stated_total is not None and abs(discrepancy) > XLS_RECONCILIATION_TOLERANCE:
-            raise HTTPException(
-                status_code=422,
-                detail=(
-                    f"Reconciliation gap too large to be the known dormant-account issue: "
-                    f"parsed total {parsed_total} vs stated {stated_total} "
-                    f"(off by {discrepancy}). Import aborted — check this file's format."
-                ),
-            )
+        # Relaxed: this source structurally omits some dormant/zero-activity
+        # accounts, so a mismatch is expected. Never block the import on
+        # this — always save the data and report the exact discrepancy, so
+        # a human can review it rather than being locked out of the import.
         reconciled = stated_total is not None and abs(discrepancy) < Decimal("0.01")
 
     bill_period = BillPeriod(

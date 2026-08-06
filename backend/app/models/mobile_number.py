@@ -13,10 +13,10 @@ class MobileNumberStatus(str, enum.Enum):
 
 
 class MobileNumber(Base):
-    __tablename__ = "mobile_numbers"
+    __tablename__ = "dialog_mobile_mobile_numbers"
 
     id = Column(GUID, primary_key=True, default=uuid.uuid4)
-    employee_id = Column(GUID, ForeignKey("employees.id"), nullable=False, index=True)
+    employee_id = Column(GUID, ForeignKey("dialog_mobile_employees.id"), nullable=False, index=True)
 
     mobile_no = Column(String, nullable=False, index=True)
     is_primary = Column(Boolean, nullable=False, default=False)

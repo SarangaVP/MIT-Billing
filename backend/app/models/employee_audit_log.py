@@ -14,10 +14,10 @@ class EmployeeAuditLog(Base):
     know who changed what and when — not just the current state.
     """
 
-    __tablename__ = "employee_audit_log"
+    __tablename__ = "dialog_mobile_employee_audit_log"
 
     id = Column(GUID, primary_key=True, default=uuid.uuid4)
-    employee_id = Column(GUID, ForeignKey("employees.id"), nullable=False, index=True)
+    employee_id = Column(GUID, ForeignKey("dialog_mobile_employees.id"), nullable=False, index=True)
 
     change_type = Column(String, nullable=False)  # created | updated | resigned | transferred | deleted
     changed_by = Column(String, nullable=True)     # left nullable until auth is added
