@@ -11,6 +11,7 @@ class MobitelEmployeeBase(BaseModel):
     name: str
     mobile_no: str
     lob: str | None = None
+    lob_code: str | None = None
 
 
 class MobitelEmployeeCreate(MobitelEmployeeBase):
@@ -22,6 +23,7 @@ class MobitelEmployeeUpdate(BaseModel):
     name: str | None = None
     mobile_no: str | None = None
     lob: str | None = None
+    lob_code: str | None = None
     status: MobitelEmployeeStatus | None = None
 
 

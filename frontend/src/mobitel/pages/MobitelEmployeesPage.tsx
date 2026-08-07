@@ -80,6 +80,7 @@ export default function MobitelEmployeesPage() {
               <th>Name</th>
               <th>Mobile No</th>
               <th>LOB</th>
+              <th>LOB Code</th>
               <th>Status</th>
               <th></th>
             </tr>
@@ -87,14 +88,14 @@ export default function MobitelEmployeesPage() {
           <tbody>
             {loading && (
               <tr>
-                <td colSpan={6} className="empty-row">
+                <td colSpan={7} className="empty-row">
                   Loading…
                 </td>
               </tr>
             )}
             {!loading && employees.length === 0 && (
               <tr>
-                <td colSpan={6} className="empty-row">
+                <td colSpan={7} className="empty-row">
                   No employees match.
                 </td>
               </tr>
@@ -106,6 +107,7 @@ export default function MobitelEmployeesPage() {
                   <td>{emp.name}</td>
                   <td className="mono">{emp.mobile_no}</td>
                   <td>{emp.lob || <span className="muted">—</span>}</td>
+                  <td className="mono">{emp.lob_code || <span className="muted">—</span>}</td>
                   <td>
                     <span
                       className={`pill ${

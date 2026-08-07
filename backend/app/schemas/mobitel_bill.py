@@ -25,7 +25,7 @@ class MobitelBillPeriodOut(BaseModel):
     reconciliation_discrepancy: Decimal | None
     extraction_method: str
     created_at: datetime
-    extraction_method: str
+
     model_config = {"from_attributes": True}
 
 
@@ -51,6 +51,7 @@ class MobitelBillLineItemOut(BaseModel):
     emp_no: str | None
     name: str | None
     lob: str | None
+    lob_code: str | None = None
     mobile_no: str | None
     data_cost: Decimal
     static_ip_cost: Decimal

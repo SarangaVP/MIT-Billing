@@ -31,7 +31,14 @@ class MobitelEmployee(Base):
     emp_no = Column(String, unique=True, nullable=False, index=True)
     name = Column(String, nullable=False)
     mobile_no = Column(String, unique=True, nullable=False, index=True)
-    lob = Column(String, nullable=True)
+    lob = Column(String, nullable=True)          # team NAME, e.g. "Managed Services"
+
+    # Numeric LOB code, e.g. "81" for "Managed Services". Stored as a
+    # string, not int — confirmed real data includes at least one
+    # leading-zero code ("05" for Cyber Security), which an int column
+    # would silently strip. Only present in newer file exports (first seen
+    # July 2026) — older imports leave this NULL.
+    lob_code = Column(String, nullable=True)
 
     # Only "active" employees are included when splitting a month's Net
     # cost. "pool" rows (unassigned SIMs) are imported and shown for

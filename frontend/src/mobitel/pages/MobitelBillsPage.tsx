@@ -82,15 +82,17 @@ export default function MobitelBillsPage() {
   // "Team cost" breakdown — groups every employee's Total by LOB, same as
   // the source Excel's own "Team cost" sheet (verified to reproduce it
   // exactly, aside from one known Rs. 0.34 manual-correction anomaly that
-  // existed in the original sheet itself).
+  // existed in the original sheet itself). Also carries the numeric LOB
+  // code alongside the team name, when present (only in newer file exports).
   const teamCostRows = Object.entries(
-    summaryRows.reduce<Record<string, number>>((acc, row) => {
+    summaryRows.reduce<Record<string, { cost: number; code: string | null }>>((acc, row) => {
       const team = row.lob || "Unassigned";
-      acc[team] = (acc[team] || 0) + Number(row.total);
+      if (!acc[team]) acc[team] = { cost: 0, code: row.lob_code };
+      acc[team].cost += Number(row.total);
       return acc;
     }, {})
   )
-    .map(([team, cost]) => ({ team, cost }))
+    .map(([team, { cost, code }]) => ({ team, cost, code }))
     .sort((a, b) => a.team.localeCompare(b.team));
   const teamCostTotal = teamCostRows.reduce((sum, r) => sum + r.cost, 0);
 
@@ -162,6 +164,7 @@ export default function MobitelBillsPage() {
                 <thead>
                   <tr>
                     <th>Team</th>
+                    <th>LOB Code</th>
                     <th>Cost</th>
                   </tr>
                 </thead>
@@ -169,11 +172,13 @@ export default function MobitelBillsPage() {
                   {teamCostRows.map((r) => (
                     <tr key={r.team}>
                       <td>{r.team}</td>
+                      <td className="mono">{r.code || <span className="muted">—</span>}</td>
                       <td className="mono">{money(r.cost)}</td>
                     </tr>
                   ))}
                   <tr>
                     <td style={{ fontWeight: 600 }}>Grand Total</td>
+                    <td></td>
                     <td className="mono" style={{ fontWeight: 600 }}>
                       {money(teamCostTotal)}
                     </td>
@@ -201,6 +206,7 @@ export default function MobitelBillsPage() {
                 <th>Name</th>
                 <th>Mobile No</th>
                 <th>LOB</th>
+                <th>LOB Code</th>
                 {hasUsageData && (
                   <>
                     <th>IMSI</th>
@@ -220,14 +226,14 @@ export default function MobitelBillsPage() {
             <tbody>
               {loadingSummary && (
                 <tr>
-                  <td colSpan={hasUsageData ? 14 : 8} className="empty-row">
+                  <td colSpan={hasUsageData ? 15 : 9} className="empty-row">
                     Loading…
                   </td>
                 </tr>
               )}
               {!loadingSummary && filteredRows.length === 0 && (
                 <tr>
-                  <td colSpan={hasUsageData ? 14 : 8} className="empty-row">
+                  <td colSpan={hasUsageData ? 15 : 9} className="empty-row">
                     No rows match.
                   </td>
                 </tr>
@@ -239,6 +245,7 @@ export default function MobitelBillsPage() {
                     <td>{row.name}</td>
                     <td className="mono">{row.mobile_no}</td>
                     <td>{row.lob || <span className="muted">—</span>}</td>
+                    <td className="mono">{row.lob_code || <span className="muted">—</span>}</td>
                     {hasUsageData && (
                       <>
                         <td className="mono">{row.imsi_number || "—"}</td>
