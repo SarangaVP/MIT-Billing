@@ -72,6 +72,20 @@ def import_dialog_data_bill(
         )
         .all()
     )
+
+    unmatched_in_bill_sheet: list[str] = []
+    if usage_data:
+        # The Bill sheet is the authoritative record of who was ACTUALLY
+        # billed this specific month — confirmed against real data that
+        # our own roster can include connections that were added but not
+        # yet activated, or already terminated but not yet removed. Using
+        # our roster's blanket "active" status alone overcounts; restrict
+        # to the intersection of "active in our roster" AND "actually
+        # billed this month per the Bill sheet".
+        our_connection_nos = {c.connection_no for c in active_connections}
+        active_connections = [c for c in active_connections if c.connection_no in usage_data]
+        unmatched_in_bill_sheet = sorted(set(usage_data.keys()) - our_connection_nos)
+
     users = len(active_connections)
     if users == 0:
         raise HTTPException(status_code=422, detail="No active Dialog Data Bucket connections to split this bill across")
@@ -134,6 +148,7 @@ def import_dialog_data_bill(
         reconciled=reconciled,
         reconciliation_discrepancy=discrepancy,
         extraction_method=extraction_method,
+        unmatched_in_bill_sheet=unmatched_in_bill_sheet,
     )
 
 
