@@ -33,9 +33,9 @@ export default function DialogDataEmployeesPage() {
     if (fresh) setFormTarget(fresh);
   }, [employees, formTarget === "new" ? null : formTarget?.id]);
 
-  async function handleSave(payload: { emp_no: string; name: string; team: string | null; connection_no?: string | null }) {
+  async function handleSave(payload: { emp_no: string; name: string; team: string | null; lob_code?: string | null; connection_no?: string | null }) {
     if (formTarget && formTarget !== "new") {
-      await updateDialogDataEmployee(formTarget.id, { emp_no: payload.emp_no, name: payload.name, team: payload.team });
+      await updateDialogDataEmployee(formTarget.id, { emp_no: payload.emp_no, name: payload.name, team: payload.team, lob_code: payload.lob_code });
     } else {
       await createDialogDataEmployee(payload);
       setFormTarget(null);
@@ -79,6 +79,7 @@ export default function DialogDataEmployeesPage() {
               <th>EMP No</th>
               <th>Name</th>
               <th>Team</th>
+              <th>LOB Code</th>
               <th>Connections</th>
               <th></th>
             </tr>
@@ -86,14 +87,14 @@ export default function DialogDataEmployeesPage() {
           <tbody>
             {loading && (
               <tr>
-                <td colSpan={5} className="empty-row">
+                <td colSpan={6} className="empty-row">
                   Loading…
                 </td>
               </tr>
             )}
             {!loading && employees.length === 0 && (
               <tr>
-                <td colSpan={5} className="empty-row">
+                <td colSpan={6} className="empty-row">
                   No employees match.
                 </td>
               </tr>
@@ -104,6 +105,7 @@ export default function DialogDataEmployeesPage() {
                   <td className="mono">{emp.emp_no}</td>
                   <td>{emp.name}</td>
                   <td>{emp.team || <span className="muted">—</span>}</td>
+                  <td className="mono">{emp.lob_code || <span className="muted">—</span>}</td>
                   <td className="mono">
                     {emp.connections.length === 0 ? (
                       <span className="muted">None</span>

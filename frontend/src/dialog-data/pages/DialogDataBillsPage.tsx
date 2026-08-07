@@ -60,13 +60,14 @@ export default function DialogDataBillsPage() {
   const hasUsageData = summaryRows.some((r) => r.allocation_gb !== null);
 
   const teamCostRows = Object.entries(
-    summaryRows.reduce<Record<string, number>>((acc, row) => {
+    summaryRows.reduce<Record<string, { cost: number; code: string | null }>>((acc, row) => {
       const team = row.team || "Unassigned";
-      acc[team] = (acc[team] || 0) + Number(row.cost);
+      if (!acc[team]) acc[team] = { cost: 0, code: row.lob_code };
+      acc[team].cost += Number(row.cost);
       return acc;
     }, {})
   )
-    .map(([team, cost]) => ({ team, cost }))
+    .map(([team, { cost, code }]) => ({ team, cost, code }))
     .sort((a, b) => a.team.localeCompare(b.team));
   const teamCostTotal = teamCostRows.reduce((sum, r) => sum + r.cost, 0);
   const sumOfLineItems = summaryRows.reduce((sum, r) => sum + Number(r.cost), 0);
@@ -137,6 +138,7 @@ export default function DialogDataBillsPage() {
                 <thead>
                   <tr>
                     <th>Team</th>
+                    <th>LOB Code</th>
                     <th>Cost</th>
                   </tr>
                 </thead>
@@ -144,11 +146,13 @@ export default function DialogDataBillsPage() {
                   {teamCostRows.map((r) => (
                     <tr key={r.team}>
                       <td>{r.team}</td>
+                      <td className="mono">{r.code || <span className="muted">—</span>}</td>
                       <td className="mono">{money(r.cost)}</td>
                     </tr>
                   ))}
                   <tr>
                     <td style={{ fontWeight: 600 }}>Grand Total</td>
+                    <td></td>
                     <td className="mono" style={{ fontWeight: 600 }}>
                       {money(teamCostTotal)}
                     </td>
@@ -175,6 +179,7 @@ export default function DialogDataBillsPage() {
                 <th>EMP No</th>
                 <th>Name</th>
                 <th>Team</th>
+                <th>LOB Code</th>
                 <th>Connection No</th>
                 {hasUsageData && (
                   <>
@@ -190,14 +195,14 @@ export default function DialogDataBillsPage() {
             <tbody>
               {loadingSummary && (
                 <tr>
-                  <td colSpan={hasUsageData ? 9 : 5} className="empty-row">
+                  <td colSpan={hasUsageData ? 10 : 6} className="empty-row">
                     Loading…
                   </td>
                 </tr>
               )}
               {!loadingSummary && filteredRows.length === 0 && (
                 <tr>
-                  <td colSpan={hasUsageData ? 9 : 5} className="empty-row">
+                  <td colSpan={hasUsageData ? 10 : 6} className="empty-row">
                     No rows match.
                   </td>
                 </tr>
@@ -208,6 +213,7 @@ export default function DialogDataBillsPage() {
                     <td className="mono">{row.emp_no}</td>
                     <td>{row.name}</td>
                     <td>{row.team || <span className="muted">—</span>}</td>
+                    <td className="mono">{row.lob_code || <span className="muted">—</span>}</td>
                     <td className="mono">{row.connection_no}</td>
                     {hasUsageData && (
                       <>

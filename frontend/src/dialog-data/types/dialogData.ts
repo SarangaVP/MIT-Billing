@@ -15,6 +15,7 @@ export interface DialogDataEmployee {
   emp_no: string;
   name: string;
   team: string | null;
+  lob_code: string | null;
   is_deleted: boolean;
   connections: DialogDataConnection[];
   created_at: string;
@@ -25,6 +26,7 @@ export interface DialogDataEmployeeCreateInput {
   emp_no: string;
   name: string;
   team?: string | null;
+  lob_code?: string | null;
   connection_no?: string | null;
 }
 
@@ -32,6 +34,7 @@ export interface DialogDataEmployeeUpdateInput {
   emp_no?: string;
   name?: string;
   team?: string | null;
+  lob_code?: string | null;
 }
 
 export interface DialogDataBillPeriod {
@@ -74,6 +77,7 @@ export interface DialogDataBillLineItemOut {
   emp_no: string | null;
   name: string | null;
   team: string | null;
+  lob_code: string | null;
   connection_no: string | null;
   cost: string;
   allocation_gb: string | null;

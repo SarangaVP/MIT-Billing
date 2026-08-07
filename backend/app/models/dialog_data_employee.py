@@ -28,6 +28,15 @@ class DialogDataEmployee(Base):
     name = Column(String, nullable=False)
     team = Column(String, nullable=True)   # matches "Team"/"LOB" text column in the source sheet
 
+    # Numeric LOB code, e.g. "32" for BFSI, "76" for Corporate. Sourced
+    # from the export's separate "LOB" sheet (an org-chart/HR export), NOT
+    # the Master sheet — joined by EMP No. Confirmed real coverage: ~95%
+    # of Master sheet employees have a match; the rest (people without a
+    # matching HR record in that sheet) stay NULL. Stored as a string —
+    # matches the pattern used for Mobitel's lob_code, for consistency,
+    # even though no leading-zero codes were seen in this specific file.
+    lob_code = Column(String, nullable=True)
+
     is_deleted = Column(Boolean, nullable=False, default=False)
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
