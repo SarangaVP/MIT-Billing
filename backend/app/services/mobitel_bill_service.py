@@ -165,6 +165,19 @@ def import_mobitel_bill(db: Session, pdf_path: str, label: str, portal_path: str
         .filter(MobitelEmployee.status == MobitelEmployeeStatus.active, MobitelEmployee.is_deleted.is_(False))
         .all()
     )
+
+    unmatched_in_portal_sheet: list[str] = []
+    if portal_data:
+        # Same fix as Dialog Data Bucket: the Portal sheet is the
+        # authoritative record of who was ACTUALLY billed this specific
+        # month. Our own roster's "active" status alone can overcount
+        # (e.g. someone marked active who was genuinely dormant/unbilled
+        # that month) — restrict to the intersection of "active in our
+        # roster" AND "actually present in this month's Portal sheet".
+        our_mobile_nos = {e.mobile_no for e in active_employees}
+        active_employees = [e for e in active_employees if e.mobile_no in portal_data]
+        unmatched_in_portal_sheet = sorted(set(portal_data.keys()) - our_mobile_nos)
+
     users = len(active_employees)
     if users == 0:
         raise HTTPException(status_code=422, detail="No active Mobitel employees to split this bill across")
@@ -238,6 +251,7 @@ def import_mobitel_bill(db: Session, pdf_path: str, label: str, portal_path: str
         reconciled=reconciled,
         reconciliation_discrepancy=discrepancy,
         extraction_method=extraction_method,
+        unmatched_in_portal_sheet=unmatched_in_portal_sheet,
     )
 
 

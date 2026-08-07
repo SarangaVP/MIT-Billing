@@ -39,6 +39,7 @@ class MobitelImportResult(BaseModel):
     reconciled: bool
     reconciliation_discrepancy: Decimal
     extraction_method: str
+    unmatched_in_portal_sheet: list[str] = []
 
 
 class MobitelStaticIpCostUpdateInput(BaseModel):

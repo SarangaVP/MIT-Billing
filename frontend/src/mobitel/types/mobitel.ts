@@ -62,6 +62,8 @@ export interface MobitelImportResult {
   parsed_total: string;
   reconciled: boolean;
   reconciliation_discrepancy: string;
+  extraction_method: string;
+  unmatched_in_portal_sheet: string[];
 }
 
 export interface MobitelBillLineItemOut {
