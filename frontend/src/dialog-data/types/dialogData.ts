@@ -65,6 +65,7 @@ export interface DialogDataImportResult {
   reconciled: boolean;
   reconciliation_discrepancy: string;
   extraction_method: string;
+  unmatched_in_bill_sheet: string[];
 }
 
 export interface DialogDataBillLineItemOut {

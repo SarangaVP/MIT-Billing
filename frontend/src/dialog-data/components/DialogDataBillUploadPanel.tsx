@@ -83,20 +83,31 @@ export default function DialogDataBillUploadPanel({ onImported, onCancel }: Prop
         {error && <p className="form-error">{error}</p>}
 
         {result && (
-          <div className={`banner ${result.reconciled ? "banner-success" : "banner-error"}`}>
-            {result.reconciled ? (
-              <>
-                ✓ Split {money(result.net)} across {result.users_count} connections (
-                {money(result.per_user_cost)} each). Matches exactly.
-              </>
-            ) : (
-              <>
-                Split {money(result.net)} across {result.users_count} connections. Line items sum to{" "}
-                {money(result.parsed_total)} — off by {money(Math.abs(Number(result.reconciliation_discrepancy)))}{" "}
-                from Net (small rounding drift is expected when splitting evenly).
-              </>
+          <>
+            <div className={`banner ${result.reconciled ? "banner-success" : "banner-error"}`}>
+              {result.reconciled ? (
+                <>
+                  ✓ Split {money(result.net)} across {result.users_count} connections (
+                  {money(result.per_user_cost)} each). Matches exactly.
+                </>
+              ) : (
+                <>
+                  Split {money(result.net)} across {result.users_count} connections. Line items sum to{" "}
+                  {money(result.parsed_total)} — off by {money(Math.abs(Number(result.reconciliation_discrepancy)))}{" "}
+                  from Net (small rounding drift is expected when splitting evenly).
+                </>
+              )}
+            </div>
+            {result.unmatched_in_bill_sheet.length > 0 && (
+              <div className="banner banner-error">
+                Dialog billed {result.unmatched_in_bill_sheet.length} connection
+                {result.unmatched_in_bill_sheet.length > 1 ? "s" : ""} not in your employee list, so{" "}
+                {result.unmatched_in_bill_sheet.length > 1 ? "they were" : "it was"} excluded from the split:{" "}
+                {result.unmatched_in_bill_sheet.join(", ")}. Add {result.unmatched_in_bill_sheet.length > 1 ? "them" : "it"}{" "}
+                as an employee if this connection belongs to someone.
+              </div>
             )}
-          </div>
+          </>
         )}
 
         <div className="panel-actions">
