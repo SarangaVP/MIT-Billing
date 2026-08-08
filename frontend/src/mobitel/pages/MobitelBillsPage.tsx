@@ -4,6 +4,7 @@ import { listMobitelBillPeriods, getMobitelBillSummary, setMobitelStaticIpCost, 
 import MobitelBillUploadPanel from "../components/MobitelBillUploadPanel";
 import MobitelStaticIpCostPanel from "../components/MobitelStaticIpCostPanel";
 import MobitelConfirmPanel from "../components/MobitelConfirmPanel";
+import { exportTeamCostToExcel } from "../../utils/exportTeamCost";
 
 export default function MobitelBillsPage() {
   const [periods, setPeriods] = useState<MobitelBillPeriod[]>([]);
@@ -45,10 +46,6 @@ export default function MobitelBillsPage() {
     const rows = await setMobitelStaticIpCost(editingStaticIp.id, cost);
     setSummaryRows(rows);
     setEditingStaticIp(null);
-    // Keep BOTH the detail view (selectedPeriod) and the main list (periods)
-    // in sync with the recalculation — previously only selectedPeriod was
-    // updated, so going "back" to the list showed a stale reconciliation
-    // value until a manual page refresh.
     const refreshedPeriods = await listMobitelBillPeriods();
     setPeriods(refreshedPeriods);
     if (selectedPeriod) {
@@ -79,11 +76,6 @@ export default function MobitelBillsPage() {
   const mb = (v: string | number | null) => (v == null ? "—" : `${Number(v).toLocaleString()} Mb`);
   const hasUsageData = summaryRows.some((r) => r.imsi_number !== null);
 
-  // "Team cost" breakdown — groups every employee's Total by LOB, same as
-  // the source Excel's own "Team cost" sheet (verified to reproduce it
-  // exactly, aside from one known Rs. 0.34 manual-correction anomaly that
-  // existed in the original sheet itself). Also carries the numeric LOB
-  // code alongside the team name, when present (only in newer file exports).
   const teamCostRows = Object.entries(
     summaryRows.reduce<Record<string, { cost: number; code: string | null }>>((acc, row) => {
       const team = row.lob || "Unassigned";
@@ -96,9 +88,6 @@ export default function MobitelBillsPage() {
     .sort((a, b) => a.team.localeCompare(b.team));
   const teamCostTotal = teamCostRows.reduce((sum, r) => sum + r.cost, 0);
 
-  // "PDF vs Calculated" reconciliation — the PDF's own stated figures next
-  // to what we actually computed and summed, so a mismatch is visible at a
-  // glance rather than only available as a single "off by Rs. X" pill.
   const sumOfLineItems = summaryRows.reduce((sum, r) => sum + Number(r.total), 0);
 
   if (selectedPeriod) {
@@ -160,6 +149,22 @@ export default function MobitelBillsPage() {
             </div>
 
             <div className="table-wrap" style={{ flex: "1 1 320px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 12px" }}>
+                <strong style={{ fontSize: 13 }}>Team Cost</strong>
+                <button
+                  type="button"
+                  className="link-btn"
+                  onClick={() =>
+                    exportTeamCostToExcel(
+                      teamCostRows,
+                      teamCostTotal,
+                      `MobitelData_${selectedPeriod.label.replace(/\s+/g, "_")}_team_cost.xlsx`
+                    )
+                  }
+                >
+                  Export to Excel
+                </button>
+              </div>
               <table>
                 <thead>
                   <tr>

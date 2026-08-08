@@ -3,6 +3,7 @@ import type { DialogDataBillPeriod, DialogDataBillLineItemOut } from "../types/d
 import { listDialogDataBillPeriods, getDialogDataBillSummary, deleteDialogDataBillPeriod } from "../api/dialogData";
 import DialogDataBillUploadPanel from "../components/DialogDataBillUploadPanel";
 import DialogDataConfirmPanel from "../components/DialogDataConfirmPanel";
+import { exportTeamCostToExcel } from "../../utils/exportTeamCost";
 
 export default function DialogDataBillsPage() {
   const [periods, setPeriods] = useState<DialogDataBillPeriod[]>([]);
@@ -134,6 +135,22 @@ export default function DialogDataBillsPage() {
             </div>
 
             <div className="table-wrap" style={{ flex: "1 1 320px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 12px" }}>
+                <strong style={{ fontSize: 13 }}>Team Cost</strong>
+                <button
+                  type="button"
+                  className="link-btn"
+                  onClick={() =>
+                    exportTeamCostToExcel(
+                      teamCostRows,
+                      teamCostTotal,
+                      `DialogData_${selectedPeriod.label.replace(/\s+/g, "_")}_team_cost.xlsx`
+                    )
+                  }
+                >
+                  Export to Excel
+                </button>
+              </div>
               <table>
                 <thead>
                   <tr>
