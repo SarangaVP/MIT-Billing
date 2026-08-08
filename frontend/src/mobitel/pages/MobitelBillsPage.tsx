@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback } from "react";
 import type { MobitelBillPeriod, MobitelBillLineItemOut } from "../types/mobitel";
 import { listMobitelBillPeriods, getMobitelBillSummary, setMobitelStaticIpCost, deleteMobitelBillPeriod } from "../api/mobitel";
 import MobitelBillUploadPanel from "../components/MobitelBillUploadPanel";
-import MobitelStaticIpCostPanel from "../components/MobitelStaticIpCostPanel";
+import MobitelManageStaticIpPanel from "../components/MobitelManageStaticIpPanel";
 import MobitelConfirmPanel from "../components/MobitelConfirmPanel";
 import { exportTeamCostToExcel } from "../../utils/exportTeamCost";
 
@@ -14,7 +14,7 @@ export default function MobitelBillsPage() {
   const [loadingSummary, setLoadingSummary] = useState(false);
   const [showUpload, setShowUpload] = useState(false);
   const [search, setSearch] = useState("");
-  const [editingStaticIp, setEditingStaticIp] = useState<MobitelBillLineItemOut | null>(null);
+  const [showStaticIpPanel, setShowStaticIpPanel] = useState(false);
   const [deletingPeriod, setDeletingPeriod] = useState<MobitelBillPeriod | null>(null);
   const [showBreakdown, setShowBreakdown] = useState(false);
 
@@ -41,11 +41,13 @@ export default function MobitelBillsPage() {
     }
   }
 
-  async function handleSetStaticIpCost(cost: string) {
-    if (!editingStaticIp) return;
-    const rows = await setMobitelStaticIpCost(editingStaticIp.id, cost);
+  async function handleSetStaticIpCost(lineItemId: string, cost: string) {
+    const rows = await setMobitelStaticIpCost(lineItemId, cost);
     setSummaryRows(rows);
-    setEditingStaticIp(null);
+    // Keep BOTH the detail view (selectedPeriod) and the main list (periods)
+    // in sync with the recalculation — previously only selectedPeriod was
+    // updated, so going "back" to the list showed a stale reconciliation
+    // value until a manual page refresh.
     const refreshedPeriods = await listMobitelBillPeriods();
     setPeriods(refreshedPeriods);
     if (selectedPeriod) {
@@ -107,9 +109,14 @@ export default function MobitelBillsPage() {
               )}
             </p>
           </div>
-          <button className="btn btn-ghost" onClick={() => setShowBreakdown((v) => !v)}>
-            {showBreakdown ? "Hide" : "Show"} team cost & reconciliation
-          </button>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button className="btn btn-ghost" onClick={() => setShowStaticIpPanel(true)}>
+              Manage static IP
+            </button>
+            <button className="btn btn-ghost" onClick={() => setShowBreakdown((v) => !v)}>
+              {showBreakdown ? "Hide" : "Show"} team cost & reconciliation
+            </button>
+          </div>
         </div>
 
         {showBreakdown && (
@@ -225,20 +232,19 @@ export default function MobitelBillsPage() {
                 <th>Data Cost</th>
                 <th>Static IP Cost</th>
                 <th>Total</th>
-                <th></th>
               </tr>
             </thead>
             <tbody>
               {loadingSummary && (
                 <tr>
-                  <td colSpan={hasUsageData ? 15 : 9} className="empty-row">
+                  <td colSpan={hasUsageData ? 14 : 8} className="empty-row">
                     Loading…
                   </td>
                 </tr>
               )}
               {!loadingSummary && filteredRows.length === 0 && (
                 <tr>
-                  <td colSpan={hasUsageData ? 15 : 9} className="empty-row">
+                  <td colSpan={hasUsageData ? 14 : 8} className="empty-row">
                     No rows match.
                   </td>
                 </tr>
@@ -264,22 +270,17 @@ export default function MobitelBillsPage() {
                     <td className="mono">{money(row.data_cost)}</td>
                     <td className="mono">{Number(row.static_ip_cost) > 0 ? money(row.static_ip_cost) : "—"}</td>
                     <td className="mono">{money(row.total)}</td>
-                    <td>
-                      <button className="link-btn" onClick={() => setEditingStaticIp(row)}>
-                        Set static IP
-                      </button>
-                    </td>
                   </tr>
                 ))}
             </tbody>
           </table>
         </div>
 
-        {editingStaticIp && (
-          <MobitelStaticIpCostPanel
-            row={editingStaticIp}
+        {showStaticIpPanel && (
+          <MobitelManageStaticIpPanel
+            rows={summaryRows}
             onSave={handleSetStaticIpCost}
-            onCancel={() => setEditingStaticIp(null)}
+            onCancel={() => setShowStaticIpPanel(false)}
           />
         )}
       </div>
