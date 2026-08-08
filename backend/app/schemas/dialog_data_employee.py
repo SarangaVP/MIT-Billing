@@ -22,6 +22,7 @@ class DialogDataEmployeeBase(BaseModel):
     emp_no: str
     name: str
     team: str | None = None
+    lob_code: str | None = None
 
 
 class DialogDataEmployeeCreate(DialogDataEmployeeBase):
@@ -32,6 +33,7 @@ class DialogDataEmployeeUpdate(BaseModel):
     emp_no: str | None = None
     name: str | None = None
     team: str | None = None
+    lob_code: str | None = None
 
 
 class DialogDataEmployeeOut(DialogDataEmployeeBase):

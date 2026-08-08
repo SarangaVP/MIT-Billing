@@ -187,6 +187,7 @@ def get_summary(db: Session, bill_period_id: uuid.UUID) -> list[dict]:
             "emp_no": emp.emp_no,
             "name": emp.name,
             "team": emp.team,
+            "lob_code": emp.lob_code,
             "connection_no": conn.connection_no,
             "cost": li.cost,
             "allocation_gb": li.allocation_gb,

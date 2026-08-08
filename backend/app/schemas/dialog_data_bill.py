@@ -47,6 +47,7 @@ class DialogDataBillLineItemOut(BaseModel):
     emp_no: str | None
     name: str | None
     team: str | None
+    lob_code: str | None = None
     connection_no: str | None
     cost: Decimal
 

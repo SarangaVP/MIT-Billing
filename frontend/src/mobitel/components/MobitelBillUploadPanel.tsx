@@ -98,6 +98,16 @@ export default function MobitelBillUploadPanel({ onImported, onCancel }: Props) 
           </div>
         )}
 
+        {result && result.unmatched_in_portal_sheet.length > 0 && (
+          <div className="banner banner-error">
+            {result.unmatched_in_portal_sheet.length} number{result.unmatched_in_portal_sheet.length > 1 ? "s" : ""}{" "}
+            in the Portal sheet {result.unmatched_in_portal_sheet.length > 1 ? "aren't" : "isn't"} an active employee
+            in your list, so {result.unmatched_in_portal_sheet.length > 1 ? "they were" : "it was"} excluded from
+            the split: {result.unmatched_in_portal_sheet.join(", ")}. This is expected for unassigned "Pool" numbers
+            — only worth checking if any of these should actually be active.
+          </div>
+        )}
+
         <div className="panel-actions">
           <button type="button" className="btn btn-ghost" onClick={onCancel}>
             {result ? "Close" : "Cancel"}

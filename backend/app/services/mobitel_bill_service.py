@@ -1,6 +1,6 @@
 import logging
 import uuid
-from datetime import date, datetime
+from datetime import date
 from decimal import Decimal, ROUND_HALF_UP
 
 from fastapi import HTTPException
@@ -18,23 +18,94 @@ from app.schemas.mobitel_bill import MobitelImportResult
 logger = logging.getLogger(__name__)
 
 
-def _resolve_period_dates(bill_date: date, start_dm: str | None, end_dm: str | None) -> tuple[date | None, date | None]:
+def _detect_date_order(sample_date_str: str | None) -> str:
     """
-    The bill only gives period dates as 'DD/MM' with no year. Anchors the
-    year using bill_date, handling the one edge case where the period
-    starts in the December of the previous year (e.g. bill in Jan, period
-    starts in Dec).
+    Determines whether THIS bill's dates are DD/MM/YYYY or MM/DD/YYYY, using
+    whichever field is unambiguous (one part > 12). Verified against real
+    data that a bill's OTHER dates (due date, period dates) follow the same
+    convention as its Bill Date — resolving each field's ambiguity
+    independently (rather than detecting once and applying consistently)
+    previously gave a wrong due date: June'26's real gap from bill date to
+    due date is 15 days; treating July'26's ambiguous "08/09/2026" due date
+    independently defaulted to DD/MM and produced a 45-day gap, which is
+    implausible — the correct MM/DD reading (matching this month's Bill
+    Date format) gives 15 days, consistent with June's real pattern.
+
+    Defaults to "DMY" only if truly no signal is available anywhere.
+    """
+    if sample_date_str:
+        parts = sample_date_str.split("/")
+        if len(parts) == 3:
+            try:
+                a, b = int(parts[0]), int(parts[1])
+                # If the SECOND part exceeds 12, it can't be a month under
+                # DD/MM — so this must be MM/DD (a=month, b=day).
+                if b > 12:
+                    return "MDY"
+                # If the FIRST part exceeds 12, it can't be a month under
+                # MM/DD — so this must be DD/MM (a=day, b=month).
+                if a > 12:
+                    return "DMY"
+            except ValueError:
+                pass
+    return "DMY"
+
+
+def _parse_full_date_with_order(date_str: str | None, order: str) -> date | None:
+    if not date_str:
+        return None
+    parts = date_str.split("/")
+    if len(parts) != 3:
+        return None
+    try:
+        a, b, year = int(parts[0]), int(parts[1]), int(parts[2])
+    except ValueError:
+        return None
+    day, month = (b, a) if order == "MDY" else (a, b)
+    try:
+        return date(year, month, day)
+    except ValueError:
+        return None
+
+
+def _parse_dm_with_order(dm_str: str | None, order: str, year: int) -> date | None:
+    if not dm_str:
+        return None
+    parts = dm_str.split("/")
+    if len(parts) != 2:
+        return None
+    try:
+        a, b = int(parts[0]), int(parts[1])
+    except ValueError:
+        return None
+    day, month = (b, a) if order == "MDY" else (a, b)
+    try:
+        return date(year, month, day)
+    except ValueError:
+        return None
+
+
+def _resolve_period_dates(
+    bill_date: date, start_dm: str | None, end_dm: str | None, order: str
+) -> tuple[date | None, date | None]:
+    """
+    The bill only gives period dates without a year. Anchors the year
+    using bill_date, handling the one edge case where the period starts
+    in the December of the previous year (e.g. bill in Jan, period starts
+    in Dec).
     """
     if not start_dm or not end_dm:
         return None, None
 
-    end_day, end_month = (int(x) for x in end_dm.split("/"))
-    start_day, start_month = (int(x) for x in start_dm.split("/"))
+    end_date = _parse_dm_with_order(end_dm, order, bill_date.year)
+    if end_date is None:
+        return None, None
 
-    end_year = bill_date.year
-    start_year = bill_date.year if start_month <= end_month else bill_date.year - 1
+    start_date = _parse_dm_with_order(start_dm, order, bill_date.year)
+    if start_date is not None and start_date.month > end_date.month:
+        start_date = _parse_dm_with_order(start_dm, order, bill_date.year - 1)
 
-    return date(start_year, start_month, start_day), date(end_year, end_month, end_day)
+    return start_date, end_date
 
 
 def _extract_bill_fields(pdf_path: str) -> tuple[dict, str]:
@@ -80,10 +151,11 @@ def import_mobitel_bill(db: Session, pdf_path: str, label: str, portal_path: str
     vat = Decimal(str(parsed["vat"]))
     net = bucket - vat
 
-    bill_date = datetime.strptime(parsed["bill_date"], "%d/%m/%Y").date() if parsed["bill_date"] else None
-    due_date = datetime.strptime(parsed["due_date"], "%d/%m/%Y").date() if parsed["due_date"] else None
+    date_order = _detect_date_order(parsed["bill_date"])
+    bill_date = _parse_full_date_with_order(parsed["bill_date"], date_order)
+    due_date = _parse_full_date_with_order(parsed["due_date"], date_order)
     period_start, period_end = (
-        _resolve_period_dates(bill_date, parsed["period_start_dm"], parsed["period_end_dm"])
+        _resolve_period_dates(bill_date, parsed["period_start_dm"], parsed["period_end_dm"], date_order)
         if bill_date
         else (None, None)
     )
@@ -93,6 +165,19 @@ def import_mobitel_bill(db: Session, pdf_path: str, label: str, portal_path: str
         .filter(MobitelEmployee.status == MobitelEmployeeStatus.active, MobitelEmployee.is_deleted.is_(False))
         .all()
     )
+
+    unmatched_in_portal_sheet: list[str] = []
+    if portal_data:
+        # Same fix as Dialog Data Bucket: the Portal sheet is the
+        # authoritative record of who was ACTUALLY billed this specific
+        # month. Our own roster's "active" status alone can overcount
+        # (e.g. someone marked active who was genuinely dormant/unbilled
+        # that month) — restrict to the intersection of "active in our
+        # roster" AND "actually present in this month's Portal sheet".
+        our_mobile_nos = {e.mobile_no for e in active_employees}
+        active_employees = [e for e in active_employees if e.mobile_no in portal_data]
+        unmatched_in_portal_sheet = sorted(set(portal_data.keys()) - our_mobile_nos)
+
     users = len(active_employees)
     if users == 0:
         raise HTTPException(status_code=422, detail="No active Mobitel employees to split this bill across")
@@ -166,6 +251,7 @@ def import_mobitel_bill(db: Session, pdf_path: str, label: str, portal_path: str
         reconciled=reconciled,
         reconciliation_discrepancy=discrepancy,
         extraction_method=extraction_method,
+        unmatched_in_portal_sheet=unmatched_in_portal_sheet,
     )
 
 
@@ -203,6 +289,7 @@ def get_summary(db: Session, bill_period_id: uuid.UUID) -> list[dict]:
             "emp_no": emp.emp_no,
             "name": emp.name,
             "lob": emp.lob,
+            "lob_code": emp.lob_code,
             "mobile_no": emp.mobile_no,
             "data_cost": li.data_cost,
             "static_ip_cost": li.static_ip_cost,
