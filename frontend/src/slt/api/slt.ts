@@ -71,6 +71,14 @@ export function updateSltGeneralAccountLabel(accountId: string, label: string): 
   });
 }
 
+export async function deleteSltGeneralAccount(accountId: string): Promise<void> {
+  const res = await fetch(`${BASE_URL}/slt/general/accounts/${accountId}`, { method: "DELETE" });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.detail || `Delete failed (${res.status})`);
+  }
+}
+
 export function listSltGeneralBillPeriods(): Promise<SltGeneralBillPeriod[]> {
   return request<SltGeneralBillPeriod[]>("/slt/general/bills");
 }

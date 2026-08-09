@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback } from "react";
 import type { SltGeneralBillPeriod, SltGeneralBillLineItem, SltGeneralAccount } from "../types/slt";
 import {
   listSltGeneralBillPeriods, getSltGeneralBillLineItems, deleteSltGeneralBillPeriod,
-  listSltGeneralAccounts, updateSltGeneralAccountLabel,
+  listSltGeneralAccounts, updateSltGeneralAccountLabel, deleteSltGeneralAccount,
 } from "../api/slt";
 import SltGeneralBillsUploadPanel from "../components/SltGeneralBillsUploadPanel";
 import SltConfirmPanel from "../components/SltConfirmPanel";
@@ -19,6 +19,7 @@ export default function SltGeneralBillsPage() {
   const [deletingPeriod, setDeletingPeriod] = useState<SltGeneralBillPeriod | null>(null);
   const [editingAccountId, setEditingAccountId] = useState<string | null>(null);
   const [editingLabel, setEditingLabel] = useState("");
+  const [deletingAccount, setDeletingAccount] = useState<SltGeneralAccount | null>(null);
 
   const loadAll = useCallback(async () => {
     setLoadingPeriods(true);
@@ -55,6 +56,13 @@ export default function SltGeneralBillsPage() {
   async function handleSaveLabel(accountId: string) {
     await updateSltGeneralAccountLabel(accountId, editingLabel);
     setEditingAccountId(null);
+    loadAll();
+  }
+
+  async function handleDeleteAccount() {
+    if (!deletingAccount) return;
+    await deleteSltGeneralAccount(deletingAccount.id);
+    setDeletingAccount(null);
     loadAll();
   }
 
@@ -167,7 +175,16 @@ export default function SltGeneralBillsPage() {
         </button>
       </div>
 
-      {accounts.length > 0 && (
+      {accounts.length === 0 ? (
+        <div className="field-group" style={{ marginBottom: 20 }}>
+          <span className="field-label">Accounts</span>
+          <p className="field-hint">
+            No accounts yet — they're created automatically the first time you import a bill for them. If you
+            expected to see accounts here, they may have been deleted; re-uploading a bill for that account
+            number will bring it back.
+          </p>
+        </div>
+      ) : (
         <div className="field-group" style={{ marginBottom: 20 }}>
           <span className="field-label">Accounts</span>
           {accounts.map((acc) => (
@@ -194,6 +211,9 @@ export default function SltGeneralBillsPage() {
                     }}
                   >
                     Rename
+                  </button>
+                  <button className="link-btn link-btn-danger" onClick={() => setDeletingAccount(acc)}>
+                    Delete
                   </button>
                 </>
               )}
@@ -270,6 +290,15 @@ export default function SltGeneralBillsPage() {
           message={`This removes "${deletingPeriod.account_label} — ${deletingPeriod.label}" and its itemized charges permanently. This can't be undone.`}
           onConfirm={handleDeletePeriod}
           onCancel={() => setDeletingPeriod(null)}
+        />
+      )}
+
+      {deletingAccount && (
+        <SltConfirmPanel
+          title="Delete this account?"
+          message={`This hides "${deletingAccount.label}" from the accounts list. Any bills already imported for it stay exactly as they are — nothing historical is deleted.`}
+          onConfirm={handleDeleteAccount}
+          onCancel={() => setDeletingAccount(null)}
         />
       )}
     </div>

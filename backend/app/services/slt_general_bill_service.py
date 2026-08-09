@@ -30,6 +30,13 @@ def _get_or_create_account(db: Session, account_no: str) -> SltGeneralAccount:
         account = SltGeneralAccount(account_no=account_no, label=account_no)
         db.add(account)
         db.flush()
+    elif account.is_deleted:
+        # A real bill just came in for this account number — that's
+        # proof it's active again, so un-hide it. Without this, deleting
+        # an account then re-uploading a bill for it would silently keep
+        # it hidden from the accounts list forever, even though its
+        # bill history was never actually gone.
+        account.is_deleted = False
     return account
 
 
@@ -119,6 +126,24 @@ def update_account_label(db: Session, account_id: uuid.UUID, payload: SltGeneral
     if not account:
         raise HTTPException(status_code=404, detail="SLT general account not found")
     account.label = payload.label
+    db.commit()
+    db.refresh(account)
+    return account
+
+
+def soft_delete_account(db: Session, account_id: uuid.UUID) -> SltGeneralAccount:
+    """
+    Soft delete only — hides the account from the active management list,
+    but its past bill periods keep displaying normally (list_bill_periods
+    doesn't filter on is_deleted, so history is never hidden or orphaned).
+    If you genuinely need to reuse the same account number later, this
+    account row still exists and blocks re-creation — contact support to
+    hard-delete a truly junk account with zero bills attached.
+    """
+    account = db.query(SltGeneralAccount).filter(SltGeneralAccount.id == account_id).first()
+    if not account:
+        raise HTTPException(status_code=404, detail="SLT general account not found")
+    account.is_deleted = True
     db.commit()
     db.refresh(account)
     return account

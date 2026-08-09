@@ -26,6 +26,11 @@ def update_account_label(account_id: uuid.UUID, payload: SltGeneralAccountUpdate
     return slt_general_bill_service.update_account_label(db, account_id, payload)
 
 
+@router.delete("/accounts/{account_id}", response_model=SltGeneralAccountOut)
+def delete_account(account_id: uuid.UUID, db: Session = Depends(get_db)):
+    return slt_general_bill_service.soft_delete_account(db, account_id)
+
+
 @router.get("/bills", response_model=list[SltGeneralBillPeriodOut])
 def list_bill_periods(db: Session = Depends(get_db)):
     return slt_general_bill_service.list_bill_periods(db)
