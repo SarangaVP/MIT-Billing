@@ -14,6 +14,7 @@ export default function SltTeamPackageBillsPage() {
   const [showUpload, setShowUpload] = useState(false);
   const [search, setSearch] = useState("");
   const [deletingPeriod, setDeletingPeriod] = useState<SltTeamPackageBillPeriod | null>(null);
+  const [showTeamCost, setShowTeamCost] = useState(false);
 
   const loadPeriods = useCallback(async () => {
     setLoadingPeriods(true);
@@ -62,6 +63,21 @@ export default function SltTeamPackageBillsPage() {
     const totalWithoutVat = packageSum + cess + sscl;
     const total = totalWithoutVat + vat;
 
+    // Team Cost breakdown — one row per team (e.g. "Managed Services"
+    // collapses its many individual employee rows into a single summed
+    // row), same pattern as Mobitel/Dialog Data Bucket's Team Cost table.
+    const teamCostRows = Object.entries(
+      summaryRows.reduce<Record<string, { cost: number; code: string | null }>>((acc, row) => {
+        const team = row.team || "Unassigned";
+        if (!acc[team]) acc[team] = { cost: 0, code: row.lob_code };
+        acc[team].cost += Number(row.package_price);
+        return acc;
+      }, {})
+    )
+      .map(([team, { cost, code }]) => ({ team, cost, code }))
+      .sort((a, b) => a.team.localeCompare(b.team));
+    const teamCostTotal = teamCostRows.reduce((sum, r) => sum + r.cost, 0);
+
     return (
       <div className="page">
         <div className="page-header">
@@ -78,28 +94,81 @@ export default function SltTeamPackageBillsPage() {
               )}
             </p>
           </div>
-          <button
-            className="btn btn-ghost"
-            onClick={() =>
-              exportTableToExcel(
-                ["Name", "Team", "LOB Code", "Package", "Price"],
-                [
-                  ...summaryRows.map((row) => [row.name, row.team ?? "", row.lob_code ?? "", row.package_name, Number(row.package_price)]),
-                  ["Package Sum", "", "", "", Number(packageSum.toFixed(2))],
-                  ["Cess", "", "", "", Number(cess.toFixed(2))],
-                  ["SSCL", "", "", "", Number(sscl.toFixed(2))],
-                  ["VAT", "", "", "", Number(vat.toFixed(2))],
-                  ["Total without VAT", "", "", "", Number(totalWithoutVat.toFixed(2))],
-                  ["Total", "", "", "", Number(total.toFixed(2))],
-                ],
-                `SLT_TeamPackage_${selectedPeriod.label.replace(/\s+/g, "_")}.xlsx`,
-                "Employees"
-              )
-            }
-          >
-            Export to Excel
-          </button>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button className="btn btn-ghost" onClick={() => setShowTeamCost((v) => !v)}>
+              {showTeamCost ? "Hide" : "Show"} team cost
+            </button>
+            <button
+              className="btn btn-ghost"
+              onClick={() =>
+                exportTableToExcel(
+                  ["Name", "Team", "LOB Code", "Package", "Price"],
+                  [
+                    ...summaryRows.map((row) => [row.name, row.team ?? "", row.lob_code ?? "", row.package_name, Number(row.package_price)]),
+                    ["Package Sum", "", "", "", Number(packageSum.toFixed(2))],
+                    ["Cess", "", "", "", Number(cess.toFixed(2))],
+                    ["SSCL", "", "", "", Number(sscl.toFixed(2))],
+                    ["VAT", "", "", "", Number(vat.toFixed(2))],
+                    ["Total without VAT", "", "", "", Number(totalWithoutVat.toFixed(2))],
+                    ["Total", "", "", "", Number(total.toFixed(2))],
+                  ],
+                  `SLT_TeamPackage_${selectedPeriod.label.replace(/\s+/g, "_")}.xlsx`,
+                  "Employees"
+                )
+              }
+            >
+              Export to Excel
+            </button>
+          </div>
         </div>
+
+        {showTeamCost && (
+          <div className="table-wrap" style={{ marginBottom: 20, maxWidth: 480 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 12px" }}>
+              <strong style={{ fontSize: 13 }}>Team Cost</strong>
+              <button
+                type="button"
+                className="link-btn"
+                onClick={() =>
+                  exportTableToExcel(
+                    ["Team", "LOB Code", "Price"],
+                    [
+                      ...teamCostRows.map((r) => [r.team, r.code ?? "", Number(r.cost.toFixed(2))]),
+                      ["Grand Total", "", Number(teamCostTotal.toFixed(2))],
+                    ],
+                    `SLT_TeamPackage_${selectedPeriod.label.replace(/\s+/g, "_")}_team_cost.xlsx`,
+                    "Team Cost"
+                  )
+                }
+              >
+                Export to Excel
+              </button>
+            </div>
+            <table>
+              <thead>
+                <tr>
+                  <th>Team</th>
+                  <th>LOB Code</th>
+                  <th>Price</th>
+                </tr>
+              </thead>
+              <tbody>
+                {teamCostRows.map((r) => (
+                  <tr key={r.team}>
+                    <td>{r.team}</td>
+                    <td className="mono">{r.code || <span className="muted">—</span>}</td>
+                    <td className="mono">{money(r.cost)}</td>
+                  </tr>
+                ))}
+                <tr className="row-strong">
+                  <td>Grand Total</td>
+                  <td></td>
+                  <td className="mono">{money(teamCostTotal)}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        )}
 
         <div className="toolbar">
           <input
