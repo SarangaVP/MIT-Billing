@@ -3,34 +3,44 @@ from datetime import datetime
 
 from pydantic import BaseModel
 
-from app.models.mobitel_employee import MobitelEmployeeStatus
+from app.models.mobitel_connection import MobitelConnectionStatus
+
+
+class MobitelConnectionOut(BaseModel):
+    id: uuid.UUID
+    mobile_no: str
+    status: MobitelConnectionStatus
+
+    model_config = {"from_attributes": True}
+
+
+class MobitelConnectionCreate(BaseModel):
+    mobile_no: str
 
 
 class MobitelEmployeeBase(BaseModel):
     emp_no: str
     name: str
-    mobile_no: str
     lob: str | None = None
     lob_code: str | None = None
 
 
 class MobitelEmployeeCreate(MobitelEmployeeBase):
-    pass
+    mobile_no: str | None = None   # optional initial connection, like Dialog Mobile/Dialog Data
 
 
 class MobitelEmployeeUpdate(BaseModel):
     emp_no: str | None = None
     name: str | None = None
-    mobile_no: str | None = None
     lob: str | None = None
     lob_code: str | None = None
-    status: MobitelEmployeeStatus | None = None
 
 
 class MobitelEmployeeOut(MobitelEmployeeBase):
     id: uuid.UUID
-    status: MobitelEmployeeStatus
+    is_pool: bool
     is_deleted: bool
+    connections: list[MobitelConnectionOut] = []
     created_at: datetime
     updated_at: datetime
 

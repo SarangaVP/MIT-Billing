@@ -40,6 +40,21 @@ export function deleteMobitelEmployee(id: string): Promise<MobitelEmployee> {
   return request<MobitelEmployee>(`/mobitel/employees/${id}`, { method: "DELETE" });
 }
 
+export function addMobitelConnection(employeeId: string, mobileNo: string): Promise<MobitelEmployee> {
+  return request<MobitelEmployee>(`/mobitel/employees/${employeeId}/connections`, {
+    method: "POST",
+    body: JSON.stringify({ mobile_no: mobileNo }),
+  });
+}
+
+export async function removeMobitelConnection(connectionId: string): Promise<void> {
+  const res = await fetch(`${BASE_URL}/mobitel/employees/connections/${connectionId}`, { method: "DELETE" });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.detail || `Delete failed (${res.status})`);
+  }
+}
+
 // Bills
 
 export function listMobitelBillPeriods(): Promise<MobitelBillPeriod[]> {
@@ -75,7 +90,6 @@ export function setMobitelStaticIpCost(lineItemId: string, cost: string): Promis
     body: JSON.stringify({ cost }),
   });
 }
-
 
 export async function deleteMobitelBillPeriod(billPeriodId: string): Promise<void> {
   const res = await fetch(`${BASE_URL}/mobitel/bills/${billPeriodId}`, { method: "DELETE" });

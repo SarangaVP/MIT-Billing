@@ -44,6 +44,6 @@ class DialogDataEmployee(Base):
 
     connections = relationship(
         "DialogDataConnection",
+        primaryjoin="and_(DialogDataEmployee.id==DialogDataConnection.employee_id, DialogDataConnection.is_deleted==False)",
         backref="employee",
-        cascade="all, delete-orphan",
     )

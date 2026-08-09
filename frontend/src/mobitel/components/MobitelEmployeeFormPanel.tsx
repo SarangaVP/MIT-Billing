@@ -1,55 +1,36 @@
 import { useState, type FormEvent } from "react";
-import type { MobitelEmployee, MobitelEmployeeCreateInput, MobitelEmployeeUpdateInput } from "../types/mobitel";
+import type { MobitelEmployee } from "../types/mobitel";
+import { addMobitelConnection, removeMobitelConnection } from "../api/mobitel";
 
 interface Props {
   employee: MobitelEmployee | null;
-  onSave: (payload: MobitelEmployeeCreateInput | MobitelEmployeeUpdateInput) => Promise<void>;
+  onSave: (payload: { emp_no: string; name: string; lob: string | null; lob_code?: string | null; mobile_no?: string | null }) => Promise<void>;
+  onRefresh: () => void;
   onCancel: () => void;
 }
 
-interface FormState {
-  emp_no: string;
-  name: string;
-  mobile_no: string;
-  lob: string;
-  status: "active" | "inactive" | "pool";
-}
-
-const EMPTY: FormState = { emp_no: "", name: "", mobile_no: "", lob: "", status: "active" };
-
-export default function MobitelEmployeeFormPanel({ employee, onSave, onCancel }: Props) {
+export default function MobitelEmployeeFormPanel({ employee, onSave, onRefresh, onCancel }: Props) {
   const isEdit = employee !== null;
-  const [form, setForm] = useState<FormState>(
-    employee
-      ? {
-          emp_no: employee.emp_no,
-          name: employee.name,
-          mobile_no: employee.mobile_no,
-          lob: employee.lob ?? "",
-          status: employee.status,
-        }
-      : EMPTY
-  );
+  const [empNo, setEmpNo] = useState(employee?.emp_no ?? "");
+  const [name, setName] = useState(employee?.name ?? "");
+  const [lob, setLob] = useState(employee?.lob ?? "");
+  const [lobCode, setLobCode] = useState(employee?.lob_code ?? "");
+  const [newMobileNo, setNewMobileNo] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-
-  function update<K extends keyof FormState>(field: K, value: FormState[K]) {
-    setForm((f) => ({ ...f, [field]: value }));
-  }
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
     setSaving(true);
     try {
-      const payload = {
-        emp_no: form.emp_no,
-        name: form.name,
-        mobile_no: form.mobile_no,
-        lob: form.lob || null,
-        ...(isEdit ? { status: form.status } : {}),
-      };
-      await onSave(payload);
+      await onSave({
+        emp_no: empNo,
+        name,
+        lob: lob || null,
+        lob_code: lobCode || null,
+        ...(isEdit ? {} : { mobile_no: newMobileNo || null }),
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
     } finally {
@@ -57,53 +38,91 @@ export default function MobitelEmployeeFormPanel({ employee, onSave, onCancel }:
     }
   }
 
+  async function handleAddConnection() {
+    if (!employee || !newMobileNo) return;
+    setError(null);
+    try {
+      await addMobitelConnection(employee.id, newMobileNo);
+      setNewMobileNo("");
+      onRefresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not add connection");
+    }
+  }
+
+  async function handleRemoveConnection(connectionId: string) {
+    if (!confirm("Remove this connection? It will be excluded from future bill splits.")) return;
+    await removeMobitelConnection(connectionId);
+    onRefresh();
+  }
+
   return (
     <div className="panel-overlay" onClick={onCancel}>
       <form className="panel" onClick={(e) => e.stopPropagation()} onSubmit={handleSubmit}>
         <h2>{isEdit ? "Edit Mobitel employee" : "Add Mobitel employee"}</h2>
+        {employee?.is_pool && <p className="field-hint">This is an unassigned "Pool" line — never billed.</p>}
 
         <label>
           EMP No
-          <input required value={form.emp_no} onChange={(e) => update("emp_no", e.target.value)} />
-          {isEdit && (
-            <span className="field-hint">
-              Editable — e.g. to promote a "Pool" line to a real employee, give it a real EMP No here.
-            </span>
-          )}
+          <input required value={empNo} onChange={(e) => setEmpNo(e.target.value)} />
         </label>
 
         <label>
           Name
-          <input required value={form.name} onChange={(e) => update("name", e.target.value)} />
-        </label>
-
-        <label>
-          Mobile No
-          <input required value={form.mobile_no} onChange={(e) => update("mobile_no", e.target.value)} />
+          <input required value={name} onChange={(e) => setName(e.target.value)} />
         </label>
 
         <label>
           LOB
-          <input value={form.lob} onChange={(e) => update("lob", e.target.value)} />
+          <input value={lob} onChange={(e) => setLob(e.target.value)} />
         </label>
 
-        {isEdit && (
+        <label>
+          LOB Code
+          <input value={lobCode} onChange={(e) => setLobCode(e.target.value)} />
+        </label>
+
+        {!isEdit && (
           <label>
-            Status
-            <select value={form.status} onChange={(e) => update("status", e.target.value as "active" | "inactive" | "pool")}>
-              <option value="active">Active</option>
-              <option value="inactive">Inactive</option>
-              <option value="pool">Pool (unassigned)</option>
-            </select>
-            <span className="field-hint">Only "Active" employees are included in the next bill split.</span>
+            Initial mobile no. <span className="field-hint">(optional)</span>
+            <input value={newMobileNo} onChange={(e) => setNewMobileNo(e.target.value)} />
           </label>
+        )}
+
+        {isEdit && employee && (
+          <div className="field-group">
+            <span className="field-label">Connections</span>
+            {employee.connections.length === 0 && <p className="field-hint">No connections yet.</p>}
+            {employee.connections.map((c) => (
+              <div key={c.id} className="inline-row">
+                <span className="mono">{c.mobile_no}</span>
+                <span className={`pill ${c.status === "active" ? "pill-active" : "pill-resigned"}`}>{c.status}</span>
+                <button type="button" className="link-btn link-btn-danger" onClick={() => handleRemoveConnection(c.id)}>
+                  Remove
+                </button>
+              </div>
+            ))}
+            <div className="inline-row">
+              <input
+                placeholder="New mobile number"
+                value={newMobileNo}
+                onChange={(e) => setNewMobileNo(e.target.value)}
+              />
+              <button type="button" className="btn btn-ghost" onClick={handleAddConnection} disabled={!newMobileNo}>
+                + Add
+              </button>
+            </div>
+            <p className="field-hint">
+              An employee can hold more than one connection — each is billed separately.
+            </p>
+          </div>
         )}
 
         {error && <p className="form-error">{error}</p>}
 
         <div className="panel-actions">
           <button type="button" className="btn btn-ghost" onClick={onCancel}>
-            Cancel
+            {isEdit ? "Close" : "Cancel"}
           </button>
           <button type="submit" className="btn btn-primary" disabled={saving}>
             {saving ? "Saving…" : isEdit ? "Save changes" : "Add employee"}
