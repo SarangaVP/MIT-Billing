@@ -6,18 +6,22 @@ import MobitelEmployeesPage from "./mobitel/pages/MobitelEmployeesPage";
 import MobitelBillsPage from "./mobitel/pages/MobitelBillsPage";
 import DialogDataEmployeesPage from "./dialog-data/pages/DialogDataEmployeesPage";
 import DialogDataBillsPage from "./dialog-data/pages/DialogDataBillsPage";
+import SltTeamPackageBillsPage from "./slt/pages/SltTeamPackageBillsPage";
+import SltGeneralBillsPage from "./slt/pages/SltGeneralBillsPage";
 import "./App.css";
 
-type Module = "dialog_mobile" | "mobitel_data_bucket" | "dialog_data_bucket";
+type Module = "dialog_mobile" | "mobitel_data_bucket" | "dialog_data_bucket" | "slt";
 type DialogTab = "employees" | "bills" | "settings";
 type MobitelTab = "employees" | "bills";
 type DialogDataTab = "employees" | "bills";
+type SltTab = "team_package" | "general";
 
 export default function App() {
   const [module, setModule] = useState<Module>("dialog_mobile");
   const [dialogTab, setDialogTab] = useState<DialogTab>("employees");
   const [mobitelTab, setMobitelTab] = useState<MobitelTab>("employees");
   const [dialogDataTab, setDialogDataTab] = useState<DialogDataTab>("employees");
+  const [sltTab, setSltTab] = useState<SltTab>("team_package");
 
   return (
     <div className="shell">
@@ -45,7 +49,10 @@ export default function App() {
           >
             Dialog Data Bucket
           </span>
-          <span className="topnav-item disabled" title="Coming next">
+          <span
+            className={`topnav-item ${module === "slt" ? "active" : ""}`}
+            onClick={() => setModule("slt")}
+          >
             SLT
           </span>
         </nav>
@@ -87,6 +94,17 @@ export default function App() {
         </div>
       )}
 
+      {module === "slt" && (
+        <div className="subnav">
+          <span className={`subnav-item ${sltTab === "team_package" ? "active" : ""}`} onClick={() => setSltTab("team_package")}>
+            Team Package
+          </span>
+          <span className={`subnav-item ${sltTab === "general" ? "active" : ""}`} onClick={() => setSltTab("general")}>
+            General Bills
+          </span>
+        </div>
+      )}
+
       <main className="content">
         {module === "dialog_mobile" && dialogTab === "employees" && <EmployeesPage />}
         {module === "dialog_mobile" && dialogTab === "bills" && <BillsPage />}
@@ -97,6 +115,9 @@ export default function App() {
 
         {module === "dialog_data_bucket" && dialogDataTab === "employees" && <DialogDataEmployeesPage />}
         {module === "dialog_data_bucket" && dialogDataTab === "bills" && <DialogDataBillsPage />}
+
+        {module === "slt" && sltTab === "team_package" && <SltTeamPackageBillsPage />}
+        {module === "slt" && sltTab === "general" && <SltGeneralBillsPage />}
       </main>
     </div>
   );

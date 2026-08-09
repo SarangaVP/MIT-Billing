@@ -31,7 +31,8 @@
 
 .brand-name {
   font-size: 15px;
-  color: var(--text);
+  font-weight: 500;
+  color: var(--text-h);
 }
 
 .topnav {
@@ -45,12 +46,18 @@
   font-size: 14px;
   color: var(--text);
   cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.topnav-item:hover:not(.active):not(.disabled) {
+  color: var(--text-h);
+  background: var(--surface-hover);
 }
 
 .topnav-item.active {
   color: var(--text-h);
   background: var(--accent-bg);
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .topnav-item.disabled {
@@ -75,12 +82,18 @@
   font-size: 13px;
   color: var(--text);
   cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.subnav-item:hover:not(.active) {
+  color: var(--text-h);
+  background: var(--surface-hover);
 }
 
 .subnav-item.active {
   color: var(--text-h);
   background: var(--accent-bg);
-  font-weight: 500;
+  font-weight: 600;
 }
 
 /* --- Content shell --- */
@@ -99,11 +112,12 @@
   align-items: flex-start;
   justify-content: space-between;
   gap: 16px;
-  margin-bottom: 24px;
+  margin-bottom: 28px;
 }
 
 .page-header h1 {
   font-size: 28px;
+  font-weight: 600;
   letter-spacing: -0.4px;
   margin: 0 0 6px;
   text-align: left;
@@ -112,6 +126,7 @@
 .page-subtitle {
   color: var(--text);
   font-size: 14px;
+  line-height: 1.5;
 }
 
 /* --- Buttons --- */
@@ -133,8 +148,18 @@
   white-space: nowrap;
 }
 
-.btn:hover {
+.btn:hover:not(:disabled) {
   background: var(--surface-hover);
+  border-color: rgba(255, 255, 255, 0.16);
+}
+
+.btn:active:not(:disabled) {
+  transform: translateY(0.5px);
+}
+
+.btn:focus-visible {
+  outline: 2px solid var(--accent-border);
+  outline-offset: 2px;
 }
 
 .btn:disabled {
@@ -159,6 +184,10 @@
 
 .btn-ghost {
   background: transparent;
+}
+
+.btn-ghost:hover:not(:disabled) {
+  background: var(--surface-hover);
 }
 
 /* --- Toolbar / filters --- */
@@ -189,6 +218,19 @@ textarea {
   border-radius: 10px;
   padding: 9px 12px;
   box-sizing: border-box;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--text);
+  opacity: 0.6;
+}
+
+input:hover:not(:focus),
+select:hover:not(:focus),
+textarea:hover:not(:focus) {
+  border-color: rgba(255, 255, 255, 0.14);
 }
 
 input:focus,
@@ -196,14 +238,16 @@ select:focus,
 textarea:focus {
   outline: 2px solid var(--accent-border);
   outline-offset: -1px;
+  border-color: var(--accent-border);
 }
 
 /* --- Banners --- */
 
 .banner {
-  padding: 10px 14px;
+  padding: 11px 16px;
   border-radius: 10px;
   font-size: 14px;
+  line-height: 1.5;
   margin-bottom: 16px;
   text-align: left;
 }
@@ -227,6 +271,7 @@ textarea:focus {
   border-radius: 16px;
   overflow: auto;
   background: var(--surface);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.24);
 }
 
 table {
@@ -245,15 +290,16 @@ td {
 
 th {
   color: var(--text);
-  font-weight: 500;
+  font-weight: 600;
   font-size: 12px;
   text-transform: uppercase;
-  letter-spacing: 0.4px;
+  letter-spacing: 0.5px;
   border-bottom: 1px solid var(--border);
 }
 
 tbody tr {
   border-bottom: 1px solid var(--border);
+  transition: background 0.1s;
 }
 
 tbody tr:last-child {
@@ -267,7 +313,8 @@ tbody tr:hover {
 .empty-row {
   text-align: center;
   color: var(--text);
-  padding: 32px 16px;
+  padding: 36px 16px;
+  opacity: 0.8;
 }
 
 .mono {
@@ -284,7 +331,24 @@ tbody tr:hover {
 
 .muted {
   color: var(--text);
-  opacity: 0.6;
+  opacity: 0.55;
+}
+
+/* --- Emphasis / total rows ---
+   Reusable classes for anywhere a number needs to stand out (totals,
+   grand totals, key figures) — use instead of inline fontWeight styles
+   for consistency across pages. */
+
+.text-strong {
+  font-weight: 700;
+  color: var(--text-h);
+}
+
+.row-strong td {
+  font-weight: 700;
+  color: var(--text-h);
+  border-top: 1px solid var(--border);
+  background: var(--surface-hover);
 }
 
 /* --- Status pills --- */
@@ -295,7 +359,7 @@ tbody tr:hover {
   padding: 3px 10px;
   border-radius: 999px;
   font-size: 12px;
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .pill-active {
@@ -318,9 +382,10 @@ tbody tr:hover {
 .approval-select {
   padding: 4px 10px;
   border-radius: 999px;
-  font-weight: 500;
+  font-weight: 600;
   border: 1px solid transparent;
   cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
 }
 
 .approval-select.approval-ok {
@@ -368,11 +433,14 @@ tbody tr:hover {
   padding: 0;
   font: inherit;
   font-size: 13px;
+  font-weight: 500;
   color: var(--accent);
   cursor: pointer;
+  transition: color 0.15s;
 }
 
 .link-btn:hover {
+  color: var(--accent-hover);
   text-decoration: underline;
 }
 
@@ -380,18 +448,24 @@ tbody tr:hover {
   color: var(--danger);
 }
 
+.link-btn-danger:hover {
+  color: var(--danger);
+  opacity: 0.8;
+}
+
 /* --- Panels / modals --- */
 
 .panel-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.4);
+  background: rgba(0, 0, 0, 0.5);
   display: flex;
   align-items: flex-start;
   justify-content: center;
   padding: 48px 16px;
   overflow-y: auto;
   z-index: 10;
+  backdrop-filter: blur(2px);
 }
 
 .panel {
@@ -412,11 +486,16 @@ tbody tr:hover {
   max-width: 400px;
 }
 
+.panel h2 {
+  font-weight: 600;
+}
+
 .panel label {
   display: flex;
   flex-direction: column;
   gap: 6px;
   font-size: 13px;
+  font-weight: 500;
   color: var(--text);
 }
 
@@ -437,6 +516,7 @@ tbody tr:hover {
 
 .field-hint {
   font-size: 12px;
+  line-height: 1.5;
   color: var(--text);
   opacity: 0.7;
   font-weight: 400;
@@ -445,15 +525,15 @@ tbody tr:hover {
 .field-group {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 12px;
+  gap: 10px;
+  padding: 14px;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: 10px;
 }
 
 .field-label {
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 700;
   color: var(--text-h);
 }
 
