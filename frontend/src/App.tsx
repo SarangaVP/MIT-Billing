@@ -28,7 +28,7 @@ export default function App() {
       <header className="topbar">
         <div className="brand">
           <span className="brand-mark">MIT</span>
-          <span className="brand-name">Mobile Billing</span>
+          <span className="brand-name">Billing</span>
         </div>
         <nav className="topnav">
           <span

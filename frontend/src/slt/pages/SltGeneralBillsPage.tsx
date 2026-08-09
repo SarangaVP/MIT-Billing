@@ -140,15 +140,15 @@ export default function SltGeneralBillsPage() {
                 ))}
               {!loadingLineItems && lineItems.length > 0 && (
                 <>
-                  <tr>
-                    <td style={{ fontWeight: 600 }}>Total</td>
-                    <td className="mono" style={{ fontWeight: 600 }}>
+                  <tr className="row-strong">
+                    <td>Total</td>
+                    <td className="mono">
                       {money(total)}
                     </td>
                   </tr>
-                  <tr>
-                    <td style={{ fontWeight: 600 }}>Total without VAT</td>
-                    <td className="mono" style={{ fontWeight: 600 }}>
+                  <tr className="row-strong">
+                    <td>Total without VAT</td>
+                    <td className="mono">
                       {money(totalWithoutVat)}
                     </td>
                   </tr>

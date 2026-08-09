@@ -167,10 +167,10 @@ export default function DialogDataBillsPage() {
                       <td className="mono">{money(r.cost)}</td>
                     </tr>
                   ))}
-                  <tr>
-                    <td style={{ fontWeight: 600 }}>Grand Total</td>
+                  <tr className="row-strong">
+                    <td>Grand Total</td>
                     <td></td>
-                    <td className="mono" style={{ fontWeight: 600 }}>
+                    <td className="mono">
                       {money(teamCostTotal)}
                     </td>
                   </tr>

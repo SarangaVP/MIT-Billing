@@ -78,6 +78,11 @@ export default function MobitelBillsPage() {
   const mb = (v: string | number | null) => (v == null ? "—" : `${Number(v).toLocaleString()} Mb`);
   const hasUsageData = summaryRows.some((r) => r.imsi_number !== null);
 
+  // "Team cost" breakdown — groups every employee's Total by LOB, same as
+  // the source Excel's own "Team cost" sheet (verified to reproduce it
+  // exactly, aside from one known Rs. 0.34 manual-correction anomaly that
+  // existed in the original sheet itself). Also carries the numeric LOB
+  // code alongside the team name, when present (only in newer file exports).
   const teamCostRows = Object.entries(
     summaryRows.reduce<Record<string, { cost: number; code: string | null }>>((acc, row) => {
       const team = row.lob || "Unassigned";
@@ -90,6 +95,9 @@ export default function MobitelBillsPage() {
     .sort((a, b) => a.team.localeCompare(b.team));
   const teamCostTotal = teamCostRows.reduce((sum, r) => sum + r.cost, 0);
 
+  // "PDF vs Calculated" reconciliation — the PDF's own stated figures next
+  // to what we actually computed and summed, so a mismatch is visible at a
+  // glance rather than only available as a single "off by Rs. X" pill.
   const sumOfLineItems = summaryRows.reduce((sum, r) => sum + Number(r.total), 0);
 
   if (selectedPeriod) {
@@ -188,10 +196,10 @@ export default function MobitelBillsPage() {
                       <td className="mono">{money(r.cost)}</td>
                     </tr>
                   ))}
-                  <tr>
-                    <td style={{ fontWeight: 600 }}>Grand Total</td>
+                  <tr className="row-strong">
+                    <td>Grand Total</td>
                     <td></td>
-                    <td className="mono" style={{ fontWeight: 600 }}>
+                    <td className="mono">
                       {money(teamCostTotal)}
                     </td>
                   </tr>

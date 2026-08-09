@@ -148,12 +148,12 @@ export default function SltTeamPackageBillsPage() {
                 ))}
               {!loadingSummary && filteredRows.length > 0 && (
                 <>
-                  <tr>
-                    <td style={{ fontWeight: 600 }}>Package Sum</td>
+                  <tr className="row-strong">
+                    <td>Package Sum</td>
                     <td></td>
                     <td></td>
                     <td></td>
-                    <td className="mono" style={{ fontWeight: 600 }}>
+                    <td className="mono">
                       {money(packageSum)}
                     </td>
                   </tr>
@@ -178,21 +178,21 @@ export default function SltTeamPackageBillsPage() {
                     <td></td>
                     <td className="mono">{money(vat)}</td>
                   </tr>
-                  <tr>
-                    <td style={{ fontWeight: 600 }}>Total without VAT</td>
+                  <tr className="row-strong">
+                    <td>Total without VAT</td>
                     <td></td>
                     <td></td>
                     <td></td>
-                    <td className="mono" style={{ fontWeight: 600 }}>
+                    <td className="mono">
                       {money(totalWithoutVat)}
                     </td>
                   </tr>
-                  <tr>
-                    <td style={{ fontWeight: 600 }}>Total</td>
+                  <tr className="row-strong">
+                    <td>Total</td>
                     <td></td>
                     <td></td>
                     <td></td>
-                    <td className="mono" style={{ fontWeight: 600 }}>
+                    <td className="mono">
                       {money(total)}
                     </td>
                   </tr>
