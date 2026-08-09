@@ -55,6 +55,13 @@ export default function SltTeamPackageBillsPage() {
     v == null ? "—" : `Rs. ${Number(v).toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
 
   if (selectedPeriod) {
+    const packageSum = summaryRows.reduce((sum, r) => sum + Number(r.package_price), 0);
+    const cess = Number(selectedPeriod.cess ?? 0);
+    const sscl = Number(selectedPeriod.sscl ?? 0);
+    const vat = Number(selectedPeriod.vat ?? 0);
+    const totalWithoutVat = packageSum + cess + sscl;
+    const total = totalWithoutVat + vat;
+
     return (
       <div className="page">
         <div className="page-header">
@@ -78,7 +85,12 @@ export default function SltTeamPackageBillsPage() {
                 ["Name", "Team", "LOB Code", "Package", "Price"],
                 [
                   ...summaryRows.map((row) => [row.name, row.team ?? "", row.lob_code ?? "", row.package_name, Number(row.package_price)]),
-                  ["Total", "", "", "", Number(summaryRows.reduce((sum, r) => sum + Number(r.package_price), 0).toFixed(2))],
+                  ["Package Sum", "", "", "", Number(packageSum.toFixed(2))],
+                  ["Cess", "", "", "", Number(cess.toFixed(2))],
+                  ["SSCL", "", "", "", Number(sscl.toFixed(2))],
+                  ["VAT", "", "", "", Number(vat.toFixed(2))],
+                  ["Total without VAT", "", "", "", Number(totalWithoutVat.toFixed(2))],
+                  ["Total", "", "", "", Number(total.toFixed(2))],
                 ],
                 `SLT_TeamPackage_${selectedPeriod.label.replace(/\s+/g, "_")}.xlsx`,
                 "Employees"
@@ -135,15 +147,56 @@ export default function SltTeamPackageBillsPage() {
                   </tr>
                 ))}
               {!loadingSummary && filteredRows.length > 0 && (
-                <tr>
-                  <td style={{ fontWeight: 600 }}>Total</td>
-                  <td></td>
-                  <td></td>
-                  <td></td>
-                  <td className="mono" style={{ fontWeight: 600 }}>
-                    {money(summaryRows.reduce((sum, r) => sum + Number(r.package_price), 0))}
-                  </td>
-                </tr>
+                <>
+                  <tr>
+                    <td style={{ fontWeight: 600 }}>Package Sum</td>
+                    <td></td>
+                    <td></td>
+                    <td></td>
+                    <td className="mono" style={{ fontWeight: 600 }}>
+                      {money(packageSum)}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>Cess</td>
+                    <td></td>
+                    <td></td>
+                    <td></td>
+                    <td className="mono">{money(cess)}</td>
+                  </tr>
+                  <tr>
+                    <td>SSCL</td>
+                    <td></td>
+                    <td></td>
+                    <td></td>
+                    <td className="mono">{money(sscl)}</td>
+                  </tr>
+                  <tr>
+                    <td>VAT</td>
+                    <td></td>
+                    <td></td>
+                    <td></td>
+                    <td className="mono">{money(vat)}</td>
+                  </tr>
+                  <tr>
+                    <td style={{ fontWeight: 600 }}>Total without VAT</td>
+                    <td></td>
+                    <td></td>
+                    <td></td>
+                    <td className="mono" style={{ fontWeight: 600 }}>
+                      {money(totalWithoutVat)}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style={{ fontWeight: 600 }}>Total</td>
+                    <td></td>
+                    <td></td>
+                    <td></td>
+                    <td className="mono" style={{ fontWeight: 600 }}>
+                      {money(total)}
+                    </td>
+                  </tr>
+                </>
               )}
             </tbody>
           </table>
