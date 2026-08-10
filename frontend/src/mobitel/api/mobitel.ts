@@ -98,3 +98,14 @@ export async function deleteMobitelBillPeriod(billPeriodId: string): Promise<voi
     throw new Error(body.detail || `Delete failed (${res.status})`);
   }
 }
+
+export async function importMobitelEmployeeSheet(file: File): Promise<any> {
+  const formData = new FormData();
+  formData.append("file", file);
+  const res = await fetch(`${BASE_URL}/mobitel/employees/import`, { method: "POST", body: formData });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.detail || `Import failed (${res.status})`);
+  }
+  return res.json();
+}

@@ -1,6 +1,9 @@
 import uuid
+import shutil
+from pathlib import Path
+from tempfile import NamedTemporaryFile
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, UploadFile, File
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -8,6 +11,7 @@ from app.schemas.mobitel_employee import (
     MobitelEmployeeCreate, MobitelEmployeeUpdate, MobitelEmployeeOut, MobitelConnectionCreate,
 )
 from app.services import mobitel_employee_service
+from app.services.mobitel_sheet_sync import sync_mobitel_sheet
 
 router = APIRouter(prefix="/mobitel/employees", tags=["mobitel-employees"])
 
@@ -40,3 +44,17 @@ def add_connection(employee_id: uuid.UUID, payload: MobitelConnectionCreate, db:
 @router.delete("/connections/{connection_id}", status_code=204)
 def remove_connection(connection_id: uuid.UUID, db: Session = Depends(get_db)):
     mobitel_employee_service.remove_connection(db, connection_id)
+
+
+@router.post("/import")
+async def import_employee_sheet(
+    file: UploadFile = File(..., description="The Summary sheet Excel export — treated as the full, current roster"),
+    db: Session = Depends(get_db),
+):
+    with NamedTemporaryFile(suffix=".xlsx", delete=False) as tmp:
+        shutil.copyfileobj(file.file, tmp)
+        tmp_path = tmp.name
+    try:
+        return sync_mobitel_sheet(db, tmp_path)
+    finally:
+        Path(tmp_path).unlink(missing_ok=True)

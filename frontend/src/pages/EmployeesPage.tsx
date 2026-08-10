@@ -1,7 +1,8 @@
 import { useEffect, useState, useCallback } from "react";
 import type { Employee, EmployeeCreateInput, EmployeeUpdateInput } from "../types/employee";
-import { listEmployees, createEmployee, updateEmployee, deleteEmployee } from "../api/employees";
+import { listEmployees, createEmployee, updateEmployee, deleteEmployee, importEmployeeSheet } from "../api/employees";
 import EmployeeFormPanel from "../components/EmployeeFormPanel";
+import EmployeeSheetUploadPanel from "../components/EmployeeSheetUploadPanel";
 
 export default function EmployeesPage() {
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -12,6 +13,7 @@ export default function EmployeesPage() {
   const [lobFilter, setLobFilter] = useState("");
 
   const [formTarget, setFormTarget] = useState<Employee | "new" | null>(null);
+  const [showSheetUpload, setShowSheetUpload] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -75,6 +77,12 @@ export default function EmployeesPage() {
         </div>
         <button className="btn btn-primary" onClick={() => setFormTarget("new")}>
           + Add employee
+        </button>
+      </div>
+
+      <div style={{ marginBottom: 16 }}>
+        <button className="btn btn-ghost" onClick={() => setShowSheetUpload(true)}>
+          + Upload employee sheet
         </button>
       </div>
 
@@ -165,6 +173,15 @@ export default function EmployeesPage() {
           onSave={handleSave}
           onNumbersChanged={load}
           onCancel={() => setFormTarget(null)}
+        />
+      )}
+
+      {showSheetUpload && (
+        <EmployeeSheetUploadPanel
+          title="Upload employee sheet"
+          uploadFn={importEmployeeSheet}
+          onImported={load}
+          onCancel={() => setShowSheetUpload(false)}
         />
       )}
     </div>

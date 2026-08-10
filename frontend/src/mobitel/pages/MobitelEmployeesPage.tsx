@@ -1,7 +1,8 @@
 import { useEffect, useState, useCallback } from "react";
 import type { MobitelEmployee } from "../types/mobitel";
-import { listMobitelEmployees, createMobitelEmployee, updateMobitelEmployee, deleteMobitelEmployee } from "../api/mobitel";
+import { listMobitelEmployees, createMobitelEmployee, updateMobitelEmployee, deleteMobitelEmployee, importMobitelEmployeeSheet } from "../api/mobitel";
 import MobitelEmployeeFormPanel from "../components/MobitelEmployeeFormPanel";
+import EmployeeSheetUploadPanel from "../../components/EmployeeSheetUploadPanel";
 
 export default function MobitelEmployeesPage() {
   const [employees, setEmployees] = useState<MobitelEmployee[]>([]);
@@ -9,6 +10,7 @@ export default function MobitelEmployeesPage() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [formTarget, setFormTarget] = useState<MobitelEmployee | "new" | null>(null);
+  const [showSheetUpload, setShowSheetUpload] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -58,6 +60,12 @@ export default function MobitelEmployeesPage() {
         </div>
         <button className="btn btn-primary" onClick={() => setFormTarget("new")}>
           + Add employee
+        </button>
+      </div>
+
+      <div style={{ marginBottom: 16 }}>
+        <button className="btn btn-ghost" onClick={() => setShowSheetUpload(true)}>
+          + Upload employee sheet
         </button>
       </div>
 
@@ -136,6 +144,15 @@ export default function MobitelEmployeesPage() {
           onSave={handleSave}
           onRefresh={load}
           onCancel={() => setFormTarget(null)}
+        />
+      )}
+
+      {showSheetUpload && (
+        <EmployeeSheetUploadPanel
+          title="Upload Mobitel employee sheet"
+          uploadFn={importMobitelEmployeeSheet}
+          onImported={load}
+          onCancel={() => setShowSheetUpload(false)}
         />
       )}
     </div>
