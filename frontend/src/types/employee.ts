@@ -23,6 +23,7 @@ export interface Employee {
   email: string | null;
   resignation: string | null; // free text, e.g. "No" or a date — matches source sheet
   is_deleted: boolean;
+  is_shared_line: boolean;
   created_at: string;
   updated_at: string;
   mobile_numbers: MobileNumber[];

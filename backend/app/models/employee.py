@@ -12,8 +12,12 @@ class Employee(Base):
 
     id = Column(GUID, primary_key=True, default=uuid.uuid4)
 
+    # EMP No is text, not int — some real values are codes like "PC0007"
     emp_no = Column(String, unique=True, nullable=False, index=True)
     name = Column(String, nullable=False)
+
+    # Mobile numbers live in their own table (app.models.mobile_number) —
+    # an employee can hold more than one number at a time, or none at all.
 
     lob = Column(String, nullable=True)
     cadre = Column(String, nullable=True)
@@ -25,6 +29,13 @@ class Employee(Base):
     # a resignation date (formats vary in the source data). Not modeled as a
     # structured status/date — edited directly, same as every other field.
     resignation = Column(String, nullable=True)
+
+    # True for a synthetic entry representing a shared/pooled line (e.g.
+    # a security post phone, a driver's phone) that has no real named
+    # employee behind it — the source sheet marks these with the literal
+    # text "General" in the EMP No column, not a real EMP No. Confirmed
+    # 5 real cases: Security 1/3/4, Driver Perera, Data bucket.
+    is_shared_line = Column(Boolean, nullable=False, default=False)
 
     is_deleted = Column(Boolean, nullable=False, default=False)
 
