@@ -120,6 +120,8 @@ export default function BillsPage() {
                 <th>Net Amount</th>
                 <th>Bucket Cost</th>
                 <th>Total</th>
+                <th>VAS</th>
+                <th>Add To Bill Charges</th>
                 <th>Salary Deduction</th>
                 <th>Need Approval</th>
               </tr>
@@ -127,14 +129,14 @@ export default function BillsPage() {
             <tbody>
               {loadingSummary && (
                 <tr>
-                  <td colSpan={hasBreakdown ? 18 : 13} className="empty-row">
+                  <td colSpan={hasBreakdown ? 20 : 15} className="empty-row">
                     Loading…
                   </td>
                 </tr>
               )}
               {!loadingSummary && filteredRows.length === 0 && (
                 <tr>
-                  <td colSpan={hasBreakdown ? 18 : 13} className="empty-row">
+                  <td colSpan={hasBreakdown ? 20 : 15} className="empty-row">
                     No rows match.
                   </td>
                 </tr>
@@ -168,6 +170,8 @@ export default function BillsPage() {
                     <td className="mono">{money(row.net_amount)}</td>
                     <td className="mono">{money(row.bucket_cost)}</td>
                     <td className="mono">{money(row.total)}</td>
+                    <td className="mono">{Number(row.vas) > 0 ? money(row.vas) : "—"}</td>
+                    <td className="mono">{Number(row.add_to_bill_charges) > 0 ? money(row.add_to_bill_charges) : "—"}</td>
                     <td className="mono">{Number(row.salary_deduction) > 0 ? money(row.salary_deduction) : "—"}</td>
                     <td>
                       <select
