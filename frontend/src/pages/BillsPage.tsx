@@ -103,6 +103,7 @@ export default function BillsPage() {
                 <th>Mobile No</th>
                 <th>EMP No</th>
                 <th>Name</th>
+                <th>Project</th>
                 {hasBreakdown && (
                   <>
                     <th>Voice Rental</th>
@@ -126,14 +127,14 @@ export default function BillsPage() {
             <tbody>
               {loadingSummary && (
                 <tr>
-                  <td colSpan={hasBreakdown ? 17 : 12} className="empty-row">
+                  <td colSpan={hasBreakdown ? 18 : 13} className="empty-row">
                     Loading…
                   </td>
                 </tr>
               )}
               {!loadingSummary && filteredRows.length === 0 && (
                 <tr>
-                  <td colSpan={hasBreakdown ? 17 : 12} className="empty-row">
+                  <td colSpan={hasBreakdown ? 18 : 13} className="empty-row">
                     No rows match.
                   </td>
                 </tr>
@@ -144,6 +145,13 @@ export default function BillsPage() {
                     <td className="mono">{row.mobile_no}</td>
                     <td className="mono">{row.emp_no || <span className="muted">—</span>}</td>
                     <td>{row.name || <span className="muted">Unmatched number</span>}</td>
+                    <td>
+                      {row.project_label ? (
+                        <span className="pill pill-transferred">{row.project_label}</span>
+                      ) : (
+                        <span className="muted">—</span>
+                      )}
+                    </td>
                     {hasBreakdown && (
                       <>
                         <td className="mono">{row.voice_rental != null ? money(Number(row.voice_rental)) : "—"}</td>

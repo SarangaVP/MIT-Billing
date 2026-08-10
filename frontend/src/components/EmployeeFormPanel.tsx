@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
 import type { Employee, EmployeeCreateInput, EmployeeUpdateInput } from "../types/employee";
-import { addMobileNumber, removeMobileNumber } from "../api/employees";
+import { addMobileNumber, removeMobileNumber, updateMobileNumberProjectLabel } from "../api/employees";
 
 interface Props {
   employee: Employee | null; // null = creating a new employee
@@ -56,6 +56,8 @@ export default function EmployeeFormPanel({ employee, onSave, onNumbersChanged, 
   const [newNumber, setNewNumber] = useState("");
   const [numberBusy, setNumberBusy] = useState(false);
   const [numberError, setNumberError] = useState<string | null>(null);
+  const [editingLabelFor, setEditingLabelFor] = useState<string | null>(null);
+  const [labelInput, setLabelInput] = useState("");
 
   const activeNumbers = employee ? employee.mobile_numbers.filter((n) => n.status === "active") : [];
 
@@ -118,6 +120,17 @@ export default function EmployeeFormPanel({ employee, onSave, onNumbersChanged, 
       setNumberError(err instanceof Error ? err.message : "Could not remove number");
     } finally {
       setNumberBusy(false);
+    }
+  }
+
+  async function handleSaveLabel(numberId: string) {
+    setNumberError(null);
+    try {
+      await updateMobileNumberProjectLabel(numberId, labelInput.trim() || null);
+      setEditingLabelFor(null);
+      onNumbersChanged();
+    } catch (err) {
+      setNumberError(err instanceof Error ? err.message : "Could not save project label");
     }
   }
 
@@ -205,6 +218,35 @@ export default function EmployeeFormPanel({ employee, onSave, onNumbersChanged, 
                 <li key={n.id} className="number-list-item">
                   <span className="mono">{n.mobile_no}</span>
                   {n.is_primary && <span className="pill pill-active">Primary</span>}
+                  {n.project_label && <span className="pill pill-transferred">{n.project_label}</span>}
+                  {editingLabelFor === n.id ? (
+                    <>
+                      <input
+                        className="mono"
+                        style={{ maxWidth: 140 }}
+                        value={labelInput}
+                        onChange={(e) => setLabelInput(e.target.value)}
+                        placeholder="Project label"
+                      />
+                      <button type="button" className="link-btn" onClick={() => handleSaveLabel(n.id)}>
+                        Save
+                      </button>
+                      <button type="button" className="link-btn" onClick={() => setEditingLabelFor(null)}>
+                        Cancel
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      type="button"
+                      className="link-btn"
+                      onClick={() => {
+                        setEditingLabelFor(n.id);
+                        setLabelInput(n.project_label ?? "");
+                      }}
+                    >
+                      {n.project_label ? "Edit label" : "+ Project label"}
+                    </button>
+                  )}
                   <button
                     type="button"
                     className="link-btn link-btn-danger"

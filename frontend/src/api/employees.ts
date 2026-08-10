@@ -56,3 +56,10 @@ export function removeMobileNumber(employeeId: string, numberId: string): Promis
     method: "DELETE",
   });
 }
+
+export function updateMobileNumberProjectLabel(numberId: string, projectLabel: string | null): Promise<MobileNumber> {
+  return request<MobileNumber>(`/employees/mobile-numbers/${numberId}/project-label`, {
+    method: "PUT",
+    body: JSON.stringify({ project_label: projectLabel }),
+  });
+}

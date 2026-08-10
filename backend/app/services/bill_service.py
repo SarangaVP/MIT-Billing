@@ -28,14 +28,18 @@ def _parse_date(value: str | None, fmt: str) -> date | None:
 
 
 def import_bill_file(db: Session, file_path: str, label: str, source_format: str) -> ImportResult:
+    """
+    source_format: "pdf" or "xls". Both produce the same downstream shape —
+    everything after parsing is format-agnostic.
+    """
     if source_format == "pdf":
         rows = parse_pdf_summary_table(file_path)
         cover = extract_pdf_cover_totals(file_path)
-        date_fmt = "%m/%d/%Y"
+        date_fmt = "%m/%d/%Y"   # PDF explicitly labels its dates MM/DD/YYYY
     elif source_format == "xls":
         rows = parse_xls_summary_table(file_path)
         cover = extract_xls_cover_totals(file_path)
-        date_fmt = "%d/%m/%Y"
+        date_fmt = "%d/%m/%Y"   # confirmed against a real bill — opposite of the PDF
     else:
         raise HTTPException(status_code=400, detail=f"Unsupported file type: {source_format}")
 
@@ -108,6 +112,7 @@ def import_bill_file(db: Session, file_path: str, label: str, source_format: str
             vat=row.get("vat", 0),
             charges_for_bill_period=row.get("charges_for_bill_period", 0),
             total_due_amount=row.get("total_due_amount", 0),
+            # Only present when source_format == "xls" — None for PDF rows
             voice_rental=row.get("voice_rental"),
             voice_usage=row.get("voice_usage"),
             sms=row.get("sms"),
@@ -186,6 +191,10 @@ def _build_summary_rows(db: Session, line_items: list[BillLineItem], as_of: date
         .all()
     )
     employee_by_mobile = {mn.mobile_no: emp for mn, emp in number_rows}
+    # project_label lives on MobileNumber, not Employee — the dict above
+    # only kept the Employee half of the join, so this was previously
+    # discarded entirely and had no way to reach the summary row.
+    project_label_by_mobile = {mn.mobile_no: mn.project_label for mn, emp in number_rows}
 
     results = []
     for li in line_items:
@@ -193,7 +202,6 @@ def _build_summary_rows(db: Session, line_items: list[BillLineItem], as_of: date
 
         net_amount = li.charges_for_bill_period - li.vat
         total = net_amount + bucket_nett
-
         # Salary Deduction = VAS + Add To Bill Charges (both are personal/
         # extra charges recovered via payroll, per current business rule —
         # note this differs from the one Excel snapshot we originally
@@ -218,6 +226,7 @@ def _build_summary_rows(db: Session, line_items: list[BillLineItem], as_of: date
             credit_limit=employee.credit_limit if employee else None,
             level=employee.level if employee else None,
             email=employee.email if employee else None,
+            project_label=project_label_by_mobile.get(li.mobile_no),
             total_usage_charges=li.total_usage_charges,
             voice_rental=li.voice_rental,
             voice_usage=li.voice_usage,

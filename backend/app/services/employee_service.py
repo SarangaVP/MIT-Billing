@@ -31,7 +31,12 @@ def _assert_number_available(db: Session, mobile_no: str):
         raise HTTPException(status_code=409, detail=f"Mobile number {mobile_no} is already active for {owner_name}")
 
 
-def list_employees(db: Session, search: str | None = None, lob: str | None = None, include_deleted: bool = False) -> list[Employee]:
+def list_employees(
+    db: Session,
+    search: str | None = None,
+    lob: str | None = None,
+    include_deleted: bool = False,
+) -> list[Employee]:
     query = db.query(Employee)
 
     if not include_deleted:
@@ -42,7 +47,9 @@ def list_employees(db: Session, search: str | None = None, lob: str | None = Non
 
     if search:
         pattern = f"%{search}%"
-        matching_employee_ids = db.query(MobileNumber.employee_id).filter(MobileNumber.mobile_no.ilike(pattern))
+        matching_employee_ids = db.query(MobileNumber.employee_id).filter(
+            MobileNumber.mobile_no.ilike(pattern)
+        )
         query = query.filter(or_(
             Employee.name.ilike(pattern),
             Employee.emp_no.ilike(pattern),
@@ -60,7 +67,10 @@ def get_employee(db: Session, employee_id: uuid.UUID) -> Employee:
 
 
 def create_employee(db: Session, payload: EmployeeCreate) -> Employee:
-    existing = db.query(Employee).filter(Employee.emp_no == payload.emp_no, Employee.is_deleted.is_(False)).first()
+    existing = db.query(Employee).filter(
+        Employee.emp_no == payload.emp_no,
+        Employee.is_deleted.is_(False),
+    ).first()
     if existing:
         raise HTTPException(status_code=409, detail=f"EMP No {payload.emp_no} already exists")
 
@@ -112,7 +122,10 @@ def add_mobile_number(db: Session, employee_id: uuid.UUID, payload: MobileNumber
     if payload.is_primary:
         db.query(MobileNumber).filter(MobileNumber.employee_id == employee.id).update({"is_primary": False})
 
-    number = MobileNumber(employee_id=employee.id, mobile_no=payload.mobile_no, is_primary=payload.is_primary)
+    number = MobileNumber(
+        employee_id=employee.id, mobile_no=payload.mobile_no, is_primary=payload.is_primary,
+        project_label=payload.project_label,
+    )
     db.add(number)
     _log(db, employee.id, "mobile_number_added", None, {"mobile_no": payload.mobile_no})
     db.commit()
@@ -120,8 +133,21 @@ def add_mobile_number(db: Session, employee_id: uuid.UUID, payload: MobileNumber
     return number
 
 
+def update_mobile_number_project_label(db: Session, number_id: uuid.UUID, project_label: str | None) -> MobileNumber:
+    number = db.query(MobileNumber).filter(MobileNumber.id == number_id).first()
+    if not number:
+        raise HTTPException(status_code=404, detail="Mobile number not found")
+    number.project_label = project_label
+    db.commit()
+    db.refresh(number)
+    return number
+
+
 def remove_mobile_number(db: Session, employee_id: uuid.UUID, number_id: uuid.UUID) -> MobileNumber:
-    number = db.query(MobileNumber).filter(MobileNumber.id == number_id, MobileNumber.employee_id == employee_id).first()
+    number = db.query(MobileNumber).filter(
+        MobileNumber.id == number_id,
+        MobileNumber.employee_id == employee_id,
+    ).first()
     if not number:
         raise HTTPException(status_code=404, detail="Mobile number not found for this employee")
 

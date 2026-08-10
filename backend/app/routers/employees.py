@@ -5,14 +5,19 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.schemas.employee import EmployeeCreate, EmployeeUpdate, EmployeeOut
-from app.schemas.mobile_number import MobileNumberCreate, MobileNumberOut
+from app.schemas.mobile_number import MobileNumberCreate, MobileNumberOut, MobileNumberUpdate
 from app.services import employee_service
 
 router = APIRouter(prefix="/employees", tags=["employees"])
 
 
 @router.get("", response_model=list[EmployeeOut])
-def list_employees(search: str | None = Query(None), lob: str | None = None, include_deleted: bool = False, db: Session = Depends(get_db)):
+def list_employees(
+    search: str | None = Query(None, description="Matches name, EMP No, or any of the employee's mobile numbers"),
+    lob: str | None = None,
+    include_deleted: bool = False,
+    db: Session = Depends(get_db),
+):
     return employee_service.list_employees(db, search=search, lob=lob, include_deleted=include_deleted)
 
 
@@ -33,6 +38,7 @@ def update_employee(employee_id: uuid.UUID, payload: EmployeeUpdate, db: Session
 
 @router.delete("/{employee_id}", response_model=EmployeeOut)
 def delete_employee(employee_id: uuid.UUID, db: Session = Depends(get_db)):
+    """Soft delete — flags the record, never removes billing history."""
     return employee_service.soft_delete_employee(db, employee_id)
 
 
@@ -43,4 +49,10 @@ def add_mobile_number(employee_id: uuid.UUID, payload: MobileNumberCreate, db: S
 
 @router.delete("/{employee_id}/mobile-numbers/{number_id}", response_model=MobileNumberOut)
 def remove_mobile_number(employee_id: uuid.UUID, number_id: uuid.UUID, db: Session = Depends(get_db)):
+    """Marks the number inactive — does not delete the row (keeps billing history intact)."""
     return employee_service.remove_mobile_number(db, employee_id, number_id)
+
+
+@router.put("/mobile-numbers/{number_id}/project-label", response_model=MobileNumberOut)
+def update_mobile_number_project_label(number_id: uuid.UUID, payload: MobileNumberUpdate, db: Session = Depends(get_db)):
+    return employee_service.update_mobile_number_project_label(db, number_id, payload.project_label)
