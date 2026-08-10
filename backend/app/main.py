@@ -5,7 +5,7 @@ from app.config import settings
 from app.database import Base, engine
 from app.routers import employees, bills, bucket_rates, mobitel_employees, mobitel_bills, dialog_data_employees, dialog_data_bills, slt_team_package_bills, slt_general_bills
 
-app = FastAPI(title="MIT Mobile Billing", version="0.1.0")
+app = FastAPI(title="MIT Billing", version="0.1.0")
 
 app.add_middleware(
     CORSMiddleware,

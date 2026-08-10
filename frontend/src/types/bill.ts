@@ -42,8 +42,11 @@ export interface BillSummaryRow {
   credit_limit: string | null;
   level: string | null;
   email: string | null;
+  project_label: string | null;
 
   total_usage_charges: string;
+  // Only populated when the bill was imported from the .xls source —
+  // null for PDF-sourced imports, which only give the combined total above.
   voice_rental: string | null;
   voice_usage: string | null;
   sms: string | null;

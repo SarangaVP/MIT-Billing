@@ -8,19 +8,18 @@ from app.types import GUID
 
 class MobitelBillLineItem(Base):
     """
-    One row per active employee per bill period. Unlike Dialog, these are
-    NOT parsed from the bill file — they're computed by splitting that
-    month's Net cost evenly across whoever was active in mobitel_employees
-    at import time. employee_id is a real FK (not a loosely-matched mobile
-    number like Dialog's line items) since every row is generated directly
-    from our own employee list — there's no "unmatched number" case here.
+    One row per active CONNECTION per bill period (not per employee — an
+    employee with 2+ connections would get 2+ line items, one per
+    connection, same pattern as Dialog Data Bucket). Computed by
+    splitting Net evenly across active connections, NOT parsed from the
+    bill file.
     """
 
     __tablename__ = "mobitel_bill_line_items"
 
     id = Column(GUID, primary_key=True, default=uuid.uuid4)
     bill_period_id = Column(GUID, ForeignKey("mobitel_bill_periods.id"), nullable=False, index=True)
-    employee_id = Column(GUID, ForeignKey("mobitel_employees.id"), nullable=False, index=True)
+    connection_id = Column(GUID, ForeignKey("mobitel_connections.id"), nullable=False, index=True)
 
     data_cost = Column(Numeric(12, 2), nullable=False)
     static_ip_cost = Column(Numeric(12, 2), nullable=False, default=0)

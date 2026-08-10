@@ -11,6 +11,7 @@ class MobileNumberOut(BaseModel):
     mobile_no: str
     is_primary: bool
     status: MobileNumberStatus
+    project_label: str | None = None
     created_at: datetime
 
     model_config = {"from_attributes": True}
@@ -19,3 +20,8 @@ class MobileNumberOut(BaseModel):
 class MobileNumberCreate(BaseModel):
     mobile_no: str
     is_primary: bool = False
+    project_label: str | None = None
+
+
+class MobileNumberUpdate(BaseModel):
+    project_label: str | None = None

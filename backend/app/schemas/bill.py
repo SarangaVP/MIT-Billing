@@ -33,10 +33,16 @@ class ImportResult(BaseModel):
 
 
 class ApprovalOverrideInput(BaseModel):
-    approval_override: str | None
+    approval_override: str | None  # e.g. "Manager approved", or null to clear it
 
 
 class BillSummaryRow(BaseModel):
+    """
+    Mirrors the source Excel 'Summary' tab, as closely as the source file
+    allows. Everything here is either taken straight from the bill or
+    computed from a documented rule — nothing is guessed.
+    """
+
     bill_line_item_id: uuid.UUID
     mobile_no: str
 
@@ -47,8 +53,11 @@ class BillSummaryRow(BaseModel):
     credit_limit: Decimal | None
     level: str | None
     email: str | None
+    project_label: str | None
 
     total_usage_charges: Decimal
+    # Only populated when the bill was imported from the .xls source —
+    # None for PDF-sourced imports, which only give the combined total above.
     voice_rental: Decimal | None
     voice_usage: Decimal | None
     sms: Decimal | None

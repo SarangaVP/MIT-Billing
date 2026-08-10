@@ -3,6 +3,7 @@ import type { BillPeriod, BillSummaryRow } from "../types/bill";
 import { listBillPeriods, getBillSummary, setApprovalOverride, deleteBillPeriod } from "../api/bills";
 import BillUploadPanel from "../components/BillUploadPanel";
 import ConfirmPanel from "../components/ConfirmPanel";
+import { exportTableToExcel } from "../utils/exportTable";
 
 export default function BillsPage() {
   const [periods, setPeriods] = useState<BillPeriod[]>([]);
@@ -68,6 +69,69 @@ export default function BillsPage() {
   const money = (v: string | number) => `Rs. ${Number(v).toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
   const hasBreakdown = summaryRows.some((r) => r.voice_rental !== null);
 
+  const sum = (key: keyof BillSummaryRow) => filteredRows.reduce((acc, r) => acc + Number(r[key] as string), 0);
+  const totals = {
+    voice_rental: sum("voice_rental"),
+    voice_usage: sum("voice_usage"),
+    sms: sum("sms"),
+    data_rental: sum("data_rental"),
+    data_usage: sum("data_usage"),
+    idd: sum("idd"),
+    roaming: sum("roaming"),
+    charges_for_bill_period: sum("charges_for_bill_period"),
+    vat: sum("vat"),
+    net_amount: sum("net_amount"),
+    bucket_cost: sum("bucket_cost"),
+    total: sum("total"),
+    vas: sum("vas"),
+    add_to_bill_charges: sum("add_to_bill_charges"),
+    salary_deduction: sum("salary_deduction"),
+  };
+
+  function handleExport() {
+    if (!selectedPeriod) return;
+    const headers = [
+      "Mobile No", "EMP No", "Name", "Project",
+      ...(hasBreakdown ? ["Voice Rental", "Voice Usage", "SMS", "Data Rental", "Data Usage"] : []),
+      "IDD", "Roaming", "Charges for Bill Period", "VAT", "Net Amount", "Bucket Cost", "Total",
+      "VAS", "Add To Bill Charges", "Salary Deduction", "Need Approval",
+    ];
+    const rows = filteredRows.map((row) => [
+      row.mobile_no, row.emp_no ?? "", row.name ?? "Unmatched number", row.project_label ?? "",
+      ...(hasBreakdown
+        ? [
+            row.voice_rental != null ? Number(row.voice_rental) : "",
+            row.voice_usage != null ? Number(row.voice_usage) : "",
+            row.sms != null ? Number(row.sms) : "",
+            row.data_rental != null ? Number(row.data_rental) : "",
+            row.data_usage != null ? Number(row.data_usage) : "",
+          ]
+        : []),
+      Number(row.idd), Number(row.roaming), Number(row.charges_for_bill_period), Number(row.vat),
+      Number(row.net_amount), Number(row.bucket_cost), Number(row.total),
+      Number(row.vas), Number(row.add_to_bill_charges), Number(row.salary_deduction), row.need_approval,
+    ]);
+    const totalsRow = [
+      "Total", "", "", "",
+      ...(hasBreakdown
+        ? [
+            Number(totals.voice_rental.toFixed(2)), Number(totals.voice_usage.toFixed(2)), Number(totals.sms.toFixed(2)),
+            Number(totals.data_rental.toFixed(2)), Number(totals.data_usage.toFixed(2)),
+          ]
+        : []),
+      Number(totals.idd.toFixed(2)), Number(totals.roaming.toFixed(2)), Number(totals.charges_for_bill_period.toFixed(2)),
+      Number(totals.vat.toFixed(2)), Number(totals.net_amount.toFixed(2)), Number(totals.bucket_cost.toFixed(2)),
+      Number(totals.total.toFixed(2)), Number(totals.vas.toFixed(2)), Number(totals.add_to_bill_charges.toFixed(2)),
+      Number(totals.salary_deduction.toFixed(2)), "",
+    ];
+    exportTableToExcel(
+      headers,
+      [...rows, totalsRow],
+      `DialogMobile_${selectedPeriod.label.replace(/\s+/g, "_")}.xlsx`,
+      "Summary"
+    );
+  }
+
   if (selectedPeriod) {
     return (
       <div className="page">
@@ -85,6 +149,9 @@ export default function BillsPage() {
               )}
             </p>
           </div>
+          <button className="btn btn-ghost" onClick={handleExport}>
+            Export to Excel
+          </button>
         </div>
 
         <div className="toolbar">
@@ -103,6 +170,7 @@ export default function BillsPage() {
                 <th>Mobile No</th>
                 <th>EMP No</th>
                 <th>Name</th>
+                <th>Project</th>
                 {hasBreakdown && (
                   <>
                     <th>Voice Rental</th>
@@ -119,6 +187,8 @@ export default function BillsPage() {
                 <th>Net Amount</th>
                 <th>Bucket Cost</th>
                 <th>Total</th>
+                <th>VAS</th>
+                <th>Add To Bill Charges</th>
                 <th>Salary Deduction</th>
                 <th>Need Approval</th>
               </tr>
@@ -126,14 +196,14 @@ export default function BillsPage() {
             <tbody>
               {loadingSummary && (
                 <tr>
-                  <td colSpan={hasBreakdown ? 17 : 12} className="empty-row">
+                  <td colSpan={hasBreakdown ? 20 : 15} className="empty-row">
                     Loading…
                   </td>
                 </tr>
               )}
               {!loadingSummary && filteredRows.length === 0 && (
                 <tr>
-                  <td colSpan={hasBreakdown ? 17 : 12} className="empty-row">
+                  <td colSpan={hasBreakdown ? 20 : 15} className="empty-row">
                     No rows match.
                   </td>
                 </tr>
@@ -144,6 +214,13 @@ export default function BillsPage() {
                     <td className="mono">{row.mobile_no}</td>
                     <td className="mono">{row.emp_no || <span className="muted">—</span>}</td>
                     <td>{row.name || <span className="muted">Unmatched number</span>}</td>
+                    <td>
+                      {row.project_label ? (
+                        <span className="pill pill-transferred">{row.project_label}</span>
+                      ) : (
+                        <span className="muted">—</span>
+                      )}
+                    </td>
                     {hasBreakdown && (
                       <>
                         <td className="mono">{row.voice_rental != null ? money(Number(row.voice_rental)) : "—"}</td>
@@ -160,6 +237,8 @@ export default function BillsPage() {
                     <td className="mono">{money(row.net_amount)}</td>
                     <td className="mono">{money(row.bucket_cost)}</td>
                     <td className="mono">{money(row.total)}</td>
+                    <td className="mono">{Number(row.vas) > 0 ? money(row.vas) : "—"}</td>
+                    <td className="mono">{Number(row.add_to_bill_charges) > 0 ? money(row.add_to_bill_charges) : "—"}</td>
                     <td className="mono">{Number(row.salary_deduction) > 0 ? money(row.salary_deduction) : "—"}</td>
                     <td>
                       <select
@@ -178,6 +257,34 @@ export default function BillsPage() {
                     </td>
                   </tr>
                 ))}
+              {!loadingSummary && filteredRows.length > 0 && (
+                <tr className="row-strong">
+                  <td>Total</td>
+                  <td></td>
+                  <td></td>
+                  <td></td>
+                  {hasBreakdown && (
+                    <>
+                      <td className="mono">{money(totals.voice_rental)}</td>
+                      <td className="mono">{money(totals.voice_usage)}</td>
+                      <td className="mono">{money(totals.sms)}</td>
+                      <td className="mono">{money(totals.data_rental)}</td>
+                      <td className="mono">{money(totals.data_usage)}</td>
+                    </>
+                  )}
+                  <td className="mono">{money(totals.idd)}</td>
+                  <td className="mono">{money(totals.roaming)}</td>
+                  <td className="mono">{money(totals.charges_for_bill_period)}</td>
+                  <td className="mono">{money(totals.vat)}</td>
+                  <td className="mono">{money(totals.net_amount)}</td>
+                  <td className="mono">{money(totals.bucket_cost)}</td>
+                  <td className="mono">{money(totals.total)}</td>
+                  <td className="mono">{money(totals.vas)}</td>
+                  <td className="mono">{money(totals.add_to_bill_charges)}</td>
+                  <td className="mono">{money(totals.salary_deduction)}</td>
+                  <td></td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>

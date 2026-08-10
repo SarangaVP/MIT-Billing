@@ -12,7 +12,8 @@ from app.ingestion.gemini_pdf_extractor import extract_via_gemini
 from app.ingestion.mobitel_portal_parser import parse_portal_sheet
 from app.models.mobitel_bill_period import MobitelBillPeriod
 from app.models.mobitel_bill_line_item import MobitelBillLineItem
-from app.models.mobitel_employee import MobitelEmployee, MobitelEmployeeStatus
+from app.models.mobitel_employee import MobitelEmployee
+from app.models.mobitel_connection import MobitelConnection, MobitelConnectionStatus
 from app.schemas.mobitel_bill import MobitelImportResult
 
 logger = logging.getLogger(__name__)
@@ -160,9 +161,15 @@ def import_mobitel_bill(db: Session, pdf_path: str, label: str, portal_path: str
         else (None, None)
     )
 
-    active_employees = (
-        db.query(MobitelEmployee)
-        .filter(MobitelEmployee.status == MobitelEmployeeStatus.active, MobitelEmployee.is_deleted.is_(False))
+    active_connections = (
+        db.query(MobitelConnection)
+        .join(MobitelEmployee, MobitelEmployee.id == MobitelConnection.employee_id)
+        .filter(
+            MobitelConnection.status == MobitelConnectionStatus.active,
+            MobitelConnection.is_deleted.is_(False),
+            MobitelEmployee.is_deleted.is_(False),
+            MobitelEmployee.is_pool.is_(False),
+        )
         .all()
     )
 
@@ -174,13 +181,13 @@ def import_mobitel_bill(db: Session, pdf_path: str, label: str, portal_path: str
         # (e.g. someone marked active who was genuinely dormant/unbilled
         # that month) — restrict to the intersection of "active in our
         # roster" AND "actually present in this month's Portal sheet".
-        our_mobile_nos = {e.mobile_no for e in active_employees}
-        active_employees = [e for e in active_employees if e.mobile_no in portal_data]
+        our_mobile_nos = {c.mobile_no for c in active_connections}
+        active_connections = [c for c in active_connections if c.mobile_no in portal_data]
         unmatched_in_portal_sheet = sorted(set(portal_data.keys()) - our_mobile_nos)
 
-    users = len(active_employees)
+    users = len(active_connections)
     if users == 0:
-        raise HTTPException(status_code=422, detail="No active Mobitel employees to split this bill across")
+        raise HTTPException(status_code=422, detail="No active Mobitel connections to split this bill across")
 
     # Static IP cost is NOT a persistent rate anymore — every employee
     # starts at 0 for a newly imported bill. It's set per-bill-period,
@@ -209,15 +216,15 @@ def import_mobitel_bill(db: Session, pdf_path: str, label: str, portal_path: str
     db.flush()
 
     line_total = Decimal("0")
-    for employee in active_employees:
+    for connection in active_connections:
         data_cost = per_user_cost.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
         line_total += data_cost
 
-        usage = portal_data.get(employee.mobile_no, {})
+        usage = portal_data.get(connection.mobile_no, {})
 
         db.add(MobitelBillLineItem(
             bill_period_id=bill_period.id,
-            employee_id=employee.id,
+            connection_id=connection.id,
             data_cost=data_cost,
             static_ip_cost=Decimal("0"),
             total=data_cost,
@@ -276,8 +283,9 @@ def delete_bill_period(db: Session, bill_period_id: uuid.UUID) -> None:
 def get_summary(db: Session, bill_period_id: uuid.UUID) -> list[dict]:
     get_bill_period(db, bill_period_id)  # 404 if missing
     rows = (
-        db.query(MobitelBillLineItem, MobitelEmployee)
-        .join(MobitelEmployee, MobitelEmployee.id == MobitelBillLineItem.employee_id)
+        db.query(MobitelBillLineItem, MobitelConnection, MobitelEmployee)
+        .join(MobitelConnection, MobitelConnection.id == MobitelBillLineItem.connection_id)
+        .join(MobitelEmployee, MobitelEmployee.id == MobitelConnection.employee_id)
         .filter(MobitelBillLineItem.bill_period_id == bill_period_id)
         .order_by(MobitelEmployee.name)
         .all()
@@ -285,12 +293,12 @@ def get_summary(db: Session, bill_period_id: uuid.UUID) -> list[dict]:
     return [
         {
             "id": li.id,
-            "employee_id": li.employee_id,
+            "connection_id": li.connection_id,
             "emp_no": emp.emp_no,
             "name": emp.name,
             "lob": emp.lob,
             "lob_code": emp.lob_code,
-            "mobile_no": emp.mobile_no,
+            "mobile_no": conn.mobile_no,
             "data_cost": li.data_cost,
             "static_ip_cost": li.static_ip_cost,
             "total": li.total,
@@ -304,7 +312,7 @@ def get_summary(db: Session, bill_period_id: uuid.UUID) -> list[dict]:
             "top_up_mb": li.top_up_mb,
             "utilized_topup_mb": li.utilized_topup_mb,
         }
-        for li, emp in rows
+        for li, conn, emp in rows
     ]
 
 

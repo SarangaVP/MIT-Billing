@@ -1,6 +1,7 @@
 """
 One-time import (and re-run-safe refresh): reads the 'Summary' sheet from
-the Mobitel data bucket Excel export and seeds/updates mobitel_employees.
+the Mobitel data bucket Excel export and seeds/updates mobitel_employees
++ mobitel_connections.
 
 IMPORTANT: reads columns by HEADER NAME, not fixed position. Confirmed
 against real files that the column layout changes between exports — the
@@ -13,11 +14,20 @@ misread the July file. Handles both:
 
 Rows where EMP No is 'NA' and Name is 'Pool' are unassigned SIMs — real
 lines held by no one, not employees. These ARE imported (for visibility),
-with a synthetic emp_no ("POOL-<mobile_no>") and status='pool'.
+as a synthetic employee (emp_no "POOL-<mobile_no>", is_pool=True) with
+one connection.
+
+Rows are grouped by EMP No — an employee can hold MORE THAN ONE
+connection. No such case exists in the real June/July data (checked
+directly), but the schema and this script now support it correctly if
+it ever does: previously, a duplicate EMP No with a different mobile
+number was silently dropped with zero warning, which was a real,
+unflagged gap.
 
 Re-running this script with a newer file UPDATES existing employees'
 team/lob_code (e.g. to backfill lob_code for people seeded before it
-existed) — it does not just skip duplicates blindly.
+existed) and ADDS any new connection numbers found for them — it does
+not just skip duplicates blindly.
 
 Usage:
     python scripts/import_mobitel_summary.py /path/to/Mobitel_Jul26.xlsx
@@ -30,7 +40,8 @@ import openpyxl
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "backend"))
 
 from app.database import SessionLocal, Base, engine  # noqa: E402
-from app.models.mobitel_employee import MobitelEmployee, MobitelEmployeeStatus  # noqa: E402
+from app.models.mobitel_employee import MobitelEmployee  # noqa: E402
+from app.models.mobitel_connection import MobitelConnection  # noqa: E402
 
 POOL_MARKERS = {"na", "pool"}
 
@@ -88,16 +99,17 @@ def main(xlsx_path: str):
     Base.metadata.create_all(bind=engine)
     db = SessionLocal()
 
-    inserted, inserted_pool, updated, skipped_missing, conflicts = 0, 0, 0, 0, 0
+    inserted, inserted_pool, connections_added, updated = 0, 0, 0, 0
+    skipped_missing, conflicts = 0, 0
     conflict_details = []
 
     try:
         employee_by_emp_no: dict[str, MobitelEmployee] = {
             e.emp_no: e for e in db.query(MobitelEmployee).all()
         }
-        employee_by_mobile: dict[str, MobitelEmployee] = {
-            e.mobile_no: e for e in employee_by_emp_no.values()
-        }
+        employee_by_mobile: dict[str, MobitelEmployee] = {}
+        for conn in db.query(MobitelConnection).filter(MobitelConnection.is_deleted.is_(False)).all():
+            employee_by_mobile[conn.mobile_no] = conn.employee
 
         for row in ws.iter_rows(min_row=2, max_row=1000, values_only=True):
             mobile_no = row[mobile_idx] if mobile_idx < len(row) else None
@@ -129,11 +141,10 @@ def main(xlsx_path: str):
                     )
                     continue
 
-                employee = MobitelEmployee(
-                    emp_no=synthetic_emp_no, name="Pool", mobile_no=mobile_no_str,
-                    status=MobitelEmployeeStatus.pool,
-                )
+                employee = MobitelEmployee(emp_no=synthetic_emp_no, name="Pool", is_pool=True)
                 db.add(employee)
+                db.flush()
+                db.add(MobitelConnection(employee_id=employee.id, mobile_no=mobile_no_str))
                 employee_by_emp_no[synthetic_emp_no] = employee
                 employee_by_mobile[mobile_no_str] = employee
                 inserted_pool += 1
@@ -168,11 +179,10 @@ def main(xlsx_path: str):
                     )
                     continue
 
-                employee = MobitelEmployee(
-                    emp_no=emp_no_str, name=name_clean, mobile_no=mobile_no_str,
-                    lob=team_name, lob_code=lob_code,
-                )
+                employee = MobitelEmployee(emp_no=emp_no_str, name=name_clean, lob=team_name, lob_code=lob_code)
                 db.add(employee)
+                db.flush()
+                db.add(MobitelConnection(employee_id=employee.id, mobile_no=mobile_no_str))
                 employee_by_emp_no[emp_no_str] = employee
                 employee_by_mobile[mobile_no_str] = employee
                 inserted += 1
@@ -190,12 +200,31 @@ def main(xlsx_path: str):
                 if changed:
                     updated += 1
 
+                # This is the actual fix: if this employee doesn't yet
+                # have THIS mobile number as one of their connections,
+                # add it as a NEW connection instead of silently dropping
+                # it (confirmed the previous version of this script did
+                # exactly that — tested with a synthetic multi-mobile
+                # case and it lost the second number with zero warning).
+                if mobile_no_str not in employee_by_mobile:
+                    db.add(MobitelConnection(employee_id=existing.id, mobile_no=mobile_no_str))
+                    employee_by_mobile[mobile_no_str] = existing
+                    connections_added += 1
+                elif employee_by_mobile[mobile_no_str].emp_no != emp_no_str:
+                    conflicts += 1
+                    owner = employee_by_mobile[mobile_no_str]
+                    conflict_details.append(
+                        f"  {mobile_no_str}: file says EMP {emp_no_str} ({name_clean}), "
+                        f"but already assigned to EMP {owner.emp_no} ({owner.name})"
+                    )
+
         db.commit()
     finally:
         db.close()
 
     print(f"Imported {inserted} new Mobitel employees.")
     print(f"Imported {inserted_pool} new unassigned 'Pool' rows.")
+    print(f"Added {connections_added} additional connections for existing employees (multi-number cases).")
     print(f"Updated {updated} existing employees (team/lob_code refreshed).")
     print(f"Skipped {skipped_missing} rows with missing EMP No/name/mobile no.")
     if conflicts:

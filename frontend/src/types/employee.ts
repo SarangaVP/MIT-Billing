@@ -8,6 +8,7 @@ export interface MobileNumber {
   mobile_no: string;
   is_primary: boolean;
   status: MobileNumberStatus;
+  project_label: string | null;
   created_at: string;
 }
 

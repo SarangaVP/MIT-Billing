@@ -1,18 +1,24 @@
-// Mirrors backend/app/schemas/mobitel_employee.py, mobitel_bill.py, mobitel_static_ip_rate.py
+// Mirrors backend/app/schemas/mobitel_employee.py, mobitel_bill.py
 // NOTE: numeric fields are `string` — FastAPI/Pydantic serializes Decimal as
 // a JSON string, not a number. Always Number(v) before arithmetic.
 
-export type MobitelEmployeeStatus = "active" | "inactive" | "pool";
+export type MobitelConnectionStatus = "active" | "inactive";
+
+export interface MobitelConnection {
+  id: string;
+  mobile_no: string;
+  status: MobitelConnectionStatus;
+}
 
 export interface MobitelEmployee {
   id: string;
   emp_no: string;
   name: string;
-  mobile_no: string;
   lob: string | null;
   lob_code: string | null;
-  status: MobitelEmployeeStatus;
+  is_pool: boolean;
   is_deleted: boolean;
+  connections: MobitelConnection[];
   created_at: string;
   updated_at: string;
 }
@@ -20,16 +26,16 @@ export interface MobitelEmployee {
 export interface MobitelEmployeeCreateInput {
   emp_no: string;
   name: string;
-  mobile_no: string;
   lob?: string | null;
+  lob_code?: string | null;
+  mobile_no?: string | null;   // optional initial connection
 }
 
 export interface MobitelEmployeeUpdateInput {
   emp_no?: string;
   name?: string;
-  mobile_no?: string;
   lob?: string | null;
-  status?: MobitelEmployeeStatus;
+  lob_code?: string | null;
 }
 
 export interface MobitelBillPeriod {
@@ -68,7 +74,7 @@ export interface MobitelImportResult {
 
 export interface MobitelBillLineItemOut {
   id: string;
-  employee_id: string;
+  connection_id: string;
   emp_no: string | null;
   name: string | null;
   lob: string | null;

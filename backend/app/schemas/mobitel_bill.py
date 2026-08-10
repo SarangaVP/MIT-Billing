@@ -48,7 +48,7 @@ class MobitelStaticIpCostUpdateInput(BaseModel):
 
 class MobitelBillLineItemOut(BaseModel):
     id: uuid.UUID
-    employee_id: uuid.UUID
+    connection_id: uuid.UUID
     emp_no: str | None
     name: str | None
     lob: str | None
