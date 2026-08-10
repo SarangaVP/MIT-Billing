@@ -1,8 +1,27 @@
 """
 One-time import: reads the 'Master sheet' from the Dialog Data Bucket
 Excel export and seeds dialog_data_employees + dialog_data_connections.
-Also reads the SEPARATE 'LOB' sheet (an org-chart/HR export, keyed by
-EMP No) to backfill each employee's numeric lob_code.
+
+CONFIRMED two real file formats seen in practice, same pattern as
+Mobitel's Summary sheet:
+  - Newer format: 'Master sheet' has a 5th column, "LOB", with the
+    numeric team code directly on each row — no cross-referencing
+    needed at all. Verified the values agree exactly with the older
+    format's separate 'LOB' sheet (e.g. Mahesh Wijenayaka: 76 both ways).
+  - Older format: 'Master sheet' has only 4 columns (Connection No,
+    EMP No, Employee, Team) — lob_code must be cross-referenced from the
+    separate 'LOB' sheet (an org-chart/HR export), joined by EMP No.
+
+Reads columns by HEADER NAME, not fixed position, so this correctly
+detects which format a given file is — matches the same defensive
+pattern used for Mobitel's Summary sheet after that file's columns
+shifted between months.
+
+CONFIRMED the separate 'LOB' sheet (used only for the older format) has
+TWO columns both literally named "LOB" — the first has 33 rows with a
+literal "#N/A" error string, the second has zero errors. Uses the
+second one. Coverage there is ~95% (467/489 employees) — people with no
+matching row simply get lob_code=None.
 
 CONFIRMED against the real file: an employee can hold MORE THAN ONE
 connection (e.g. "Indusarani Silva" appears twice with 2 different
@@ -10,11 +29,6 @@ connection numbers, each billed separately at the full rate) — so rows
 are grouped by EMP No first, then each row's connection number is added
 under that one employee, mirroring Dialog Mobile's Employee/MobileNumber
 structure, NOT Mobitel's simpler 1:1 model.
-
-CONFIRMED the 'LOB' sheet has TWO columns both literally named "LOB" —
-the first has 33 rows with a literal "#N/A" error string, the second has
-zero errors. Uses the second one. Coverage is ~95% (467/489 employees) —
-people with no matching row in this sheet simply get lob_code=None.
 
 Usage:
     python scripts/import_dialog_data_master.py /path/to/Dialog_data_Jul26.xlsx
@@ -44,13 +58,29 @@ def to_str(value) -> str | None:
     cleaned = clean(value)
     if cleaned is None:
         return None
-    if str(cleaned) == "#N/A":
+    text = str(int(cleaned)) if isinstance(cleaned, float) else str(cleaned)
+    # "#N/A" is a genuine unresolved-lookup marker (confirmed real). "0" is
+    # also confirmed real as a placeholder for an unresolved LOB code in
+    # at least one file — not a genuine business code — so both are
+    # treated as "no value" rather than imported as if they were real.
+    if text in ("#N/A", "0"):
         return None
-    return str(int(cleaned)) if isinstance(cleaned, float) else str(cleaned)
+    return text
 
 
-def _load_lob_codes(wb) -> dict[str, str]:
-    """Returns {emp_no: lob_code} from the 'LOB' sheet, keyed by EMP No."""
+def _build_column_map(header_row) -> dict[str, int]:
+    """Maps normalized header text -> column index, so we never rely on fixed positions."""
+    col_map = {}
+    for idx, cell in enumerate(header_row):
+        if cell is None:
+            continue
+        key = str(cell).strip().lower()
+        col_map[key] = idx
+    return col_map
+
+
+def _load_lob_codes_from_separate_sheet(wb) -> dict[str, str]:
+    """Fallback for the OLDER format — cross-references the separate 'LOB' sheet by EMP No."""
     if "LOB" not in wb.sheetnames:
         return {}
     ws = wb["LOB"]
@@ -66,7 +96,18 @@ def _load_lob_codes(wb) -> dict[str, str]:
 def main(xlsx_path: str):
     wb = openpyxl.load_workbook(xlsx_path, data_only=True)
     ws = wb["Master sheet"]
-    lob_codes = _load_lob_codes(wb)
+
+    header_row = next(ws.iter_rows(min_row=1, max_row=1, values_only=True))
+    col_map = _build_column_map(header_row)
+
+    connection_idx = col_map.get("connection no")
+    emp_no_idx = col_map.get("emp no")
+    name_idx = col_map.get("employee")
+    team_idx = col_map.get("team")
+    lob_idx = col_map.get("lob")   # present only in the newer format
+
+    has_lob_in_master = lob_idx is not None
+    lob_codes_from_separate_sheet = {} if has_lob_in_master else _load_lob_codes_from_separate_sheet(wb)
 
     Base.metadata.create_all(bind=engine)
     db = SessionLocal()
@@ -83,7 +124,10 @@ def main(xlsx_path: str):
         }
 
         for row in ws.iter_rows(min_row=2, max_row=1000, values_only=True):
-            connection_no, emp_no, name, team = row[0], row[1], row[2], row[3]
+            connection_no = row[connection_idx] if connection_idx is not None and connection_idx < len(row) else None
+            emp_no = row[emp_no_idx] if emp_no_idx is not None and emp_no_idx < len(row) else None
+            name = row[name_idx] if name_idx is not None and name_idx < len(row) else None
+            team = row[team_idx] if team_idx is not None and team_idx < len(row) else None
 
             if connection_no is None and emp_no is None and name is None:
                 continue
@@ -100,6 +144,11 @@ def main(xlsx_path: str):
             )
             emp_no_str = str(emp_no_clean)
 
+            if has_lob_in_master:
+                lob_code = to_str(row[lob_idx]) if lob_idx < len(row) else None
+            else:
+                lob_code = lob_codes_from_separate_sheet.get(emp_no_str)
+
             if connection_no_str in existing_connection_nos:
                 skipped_duplicate_connection += 1
                 continue
@@ -108,7 +157,7 @@ def main(xlsx_path: str):
             if employee is None:
                 employee = DialogDataEmployee(
                     emp_no=emp_no_str, name=name_clean, team=team_clean,
-                    lob_code=lob_codes.get(emp_no_str),
+                    lob_code=lob_code,
                 )
                 db.add(employee)
                 db.flush()
@@ -116,10 +165,10 @@ def main(xlsx_path: str):
                 employees_inserted += 1
                 if employee.lob_code:
                     lob_codes_backfilled += 1
-            elif employee.lob_code is None and emp_no_str in lob_codes:
+            elif employee.lob_code is None and lob_code:
                 # Backfill lob_code for an employee already seeded before
-                # this field existed, or before we had the LOB sheet.
-                employee.lob_code = lob_codes[emp_no_str]
+                # this field existed, or before the file had this column.
+                employee.lob_code = lob_code
                 lob_codes_backfilled += 1
 
             db.add(DialogDataConnection(employee_id=employee.id, connection_no=connection_no_str))
@@ -132,9 +181,10 @@ def main(xlsx_path: str):
 
     print(f"Imported {employees_inserted} Dialog Data Bucket employees.")
     print(f"Imported {connections_inserted} connections (some employees have more than one).")
-    print(f"Backfilled lob_code for {lob_codes_backfilled} employees ({len(lob_codes)} available in the LOB sheet).")
+    print(f"Backfilled lob_code for {lob_codes_backfilled} employees.")
     print(f"Skipped {skipped_missing} rows with missing connection no/EMP No/name.")
     print(f"Skipped {skipped_duplicate_connection} duplicate connection numbers.")
+    print(f"LOB source: {'directly in Master sheet' if has_lob_in_master else 'separate LOB sheet (older format)'}")
 
 
 if __name__ == "__main__":
