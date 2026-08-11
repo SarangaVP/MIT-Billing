@@ -1,5 +1,5 @@
 """
-One-time import (and re-run-safe refresh): reads the 'Summary' sheet from
+One-time import (and re-run-safe refresh): reads the 'Master sheet' from
 the Mobitel data bucket Excel export and seeds/updates mobitel_employees
 + mobitel_connections.
 
@@ -79,7 +79,7 @@ def _build_column_map(header_row) -> dict[str, int]:
 
 def main(xlsx_path: str):
     wb = openpyxl.load_workbook(xlsx_path, data_only=True)
-    ws = wb["Summary"]
+    ws = wb["Master sheet"]
 
     header_row = next(ws.iter_rows(min_row=1, max_row=1, values_only=True))
     col_map = _build_column_map(header_row)

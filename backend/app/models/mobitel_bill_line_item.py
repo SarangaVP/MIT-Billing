@@ -1,6 +1,6 @@
 import uuid
 
-from sqlalchemy import Column, String, Numeric, DateTime, ForeignKey, func
+from sqlalchemy import Column, String, Numeric, Boolean, DateTime, ForeignKey, func
 
 from app.database import Base
 from app.types import GUID
@@ -24,6 +24,17 @@ class MobitelBillLineItem(Base):
     data_cost = Column(Numeric(12, 2), nullable=False)
     static_ip_cost = Column(Numeric(12, 2), nullable=False, default=0)
     total = Column(Numeric(12, 2), nullable=False)
+
+    # A manually-set fixed cost, used when someone's real charge for the
+    # month is a specific known amount rather than an equal share of the
+    # bucket (confirmed real cases: an SLA-based rate, and another
+    # person with no discernible pattern — no rule could be found in the
+    # source data to detect these automatically, so it's set by hand).
+    # When True, data_cost = fixed_cost_amount for this row, and this
+    # row is excluded from BOTH the shared pool (Net) and the headcount
+    # (Users) for everyone else's equal split.
+    is_fixed_cost = Column(Boolean, nullable=False, default=False)
+    fixed_cost_amount = Column(Numeric(12, 2), nullable=True)
 
     # Only populated when a "Portal" sheet was provided alongside the PDF at
     # import time — a monthly per-SIM usage snapshot, matched by mobile

@@ -1,5 +1,5 @@
 """
-Syncs Mobitel employees + connections from an uploaded Summary sheet,
+Syncs Mobitel employees + connections from an uploaded Master sheet,
 treating it as the full, authoritative current roster — same "update in
 place, never delete" approach as employee_sheet_sync.py (see that
 module's docstring for why a real delete-and-replace isn't safe here:
@@ -51,7 +51,7 @@ def _build_column_map(header_row) -> dict[str, int]:
 
 def sync_mobitel_sheet(db: Session, xlsx_path: str) -> dict:
     wb = openpyxl.load_workbook(xlsx_path, data_only=True)
-    ws = wb["Summary"]
+    ws = wb["Master sheet"]
 
     header_row = next(ws.iter_rows(min_row=1, max_row=1, values_only=True))
     col_map = _build_column_map(header_row)
