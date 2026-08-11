@@ -1,7 +1,8 @@
 import { useEffect, useState, useCallback } from "react";
 import type { DialogDataEmployee } from "../types/dialogData";
-import { listDialogDataEmployees, createDialogDataEmployee, updateDialogDataEmployee, deleteDialogDataEmployee } from "../api/dialogData";
+import { listDialogDataEmployees, createDialogDataEmployee, updateDialogDataEmployee, deleteDialogDataEmployee, importDialogDataEmployeeSheet } from "../api/dialogData";
 import DialogDataEmployeeFormPanel from "../components/DialogDataEmployeeFormPanel";
+import EmployeeSheetUploadPanel from "../../components/EmployeeSheetUploadPanel";
 
 export default function DialogDataEmployeesPage() {
   const [employees, setEmployees] = useState<DialogDataEmployee[]>([]);
@@ -9,6 +10,7 @@ export default function DialogDataEmployeesPage() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [formTarget, setFormTarget] = useState<DialogDataEmployee | "new" | null>(null);
+  const [showSheetUpload, setShowSheetUpload] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -58,6 +60,12 @@ export default function DialogDataEmployeesPage() {
         </div>
         <button className="btn btn-primary" onClick={() => setFormTarget("new")}>
           + Add employee
+        </button>
+      </div>
+
+      <div style={{ marginBottom: 16 }}>
+        <button className="btn btn-ghost" onClick={() => setShowSheetUpload(true)}>
+          + Upload employee sheet
         </button>
       </div>
 
@@ -133,6 +141,15 @@ export default function DialogDataEmployeesPage() {
           onSave={handleSave}
           onRefresh={load}
           onCancel={() => setFormTarget(null)}
+        />
+      )}
+
+      {showSheetUpload && (
+        <EmployeeSheetUploadPanel
+          title="Upload Dialog Data Bucket employee sheet"
+          uploadFn={importDialogDataEmployeeSheet}
+          onImported={load}
+          onCancel={() => setShowSheetUpload(false)}
         />
       )}
     </div>

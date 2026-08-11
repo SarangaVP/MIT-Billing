@@ -1,7 +1,8 @@
 import { useEffect, useState, useCallback } from "react";
 import type { Employee, EmployeeCreateInput, EmployeeUpdateInput } from "../types/employee";
-import { listEmployees, createEmployee, updateEmployee, deleteEmployee } from "../api/employees";
+import { listEmployees, createEmployee, updateEmployee, deleteEmployee, importEmployeeSheet } from "../api/employees";
 import EmployeeFormPanel from "../components/EmployeeFormPanel";
+import EmployeeSheetUploadPanel from "../components/EmployeeSheetUploadPanel";
 
 export default function EmployeesPage() {
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -12,6 +13,7 @@ export default function EmployeesPage() {
   const [lobFilter, setLobFilter] = useState("");
 
   const [formTarget, setFormTarget] = useState<Employee | "new" | null>(null);
+  const [showSheetUpload, setShowSheetUpload] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -60,8 +62,10 @@ export default function EmployeesPage() {
     load();
   }
 
-  function activeNumbers(employee: Employee): string[] {
-    return employee.mobile_numbers.filter((n) => n.status === "active").map((n) => n.mobile_no);
+  function formatNumbers(employee: Employee): string {
+    const active = employee.mobile_numbers.filter((n) => n.status === "active");
+    if (active.length === 0) return "—";
+    return active.map((n) => n.mobile_no).join(", ");
   }
 
   return (
@@ -73,6 +77,12 @@ export default function EmployeesPage() {
         </div>
         <button className="btn btn-primary" onClick={() => setFormTarget("new")}>
           + Add employee
+        </button>
+      </div>
+
+      <div style={{ marginBottom: 16 }}>
+        <button className="btn btn-ghost" onClick={() => setShowSheetUpload(true)}>
+          + Upload employee sheet
         </button>
       </div>
 
@@ -129,15 +139,12 @@ export default function EmployeesPage() {
             {!loading &&
               employees.map((emp) => (
                 <tr key={emp.id}>
-                  <td className="mono numbers-cell">
-                    {activeNumbers(emp).length === 0 ? (
-                      <span className="muted">—</span>
-                    ) : (
-                      activeNumbers(emp).map((n) => <span key={n}>{n}</span>)
-                    )}
-                  </td>
+                  <td className="mono">{formatNumbers(emp)}</td>
                   <td className="mono">{emp.emp_no}</td>
-                  <td>{emp.name}</td>
+                  <td>
+                    {emp.name}
+                    {emp.is_shared_line && <span className="pill pill-transferred" style={{ marginLeft: 8 }}>Shared Line</span>}
+                  </td>
                   <td>{emp.lob || <span className="muted">—</span>}</td>
                   <td>{emp.cadre || <span className="muted">—</span>}</td>
                   <td className="mono">
@@ -166,6 +173,15 @@ export default function EmployeesPage() {
           onSave={handleSave}
           onNumbersChanged={load}
           onCancel={() => setFormTarget(null)}
+        />
+      )}
+
+      {showSheetUpload && (
+        <EmployeeSheetUploadPanel
+          title="Upload employee sheet"
+          uploadFn={importEmployeeSheet}
+          onImported={load}
+          onCancel={() => setShowSheetUpload(false)}
         />
       )}
     </div>

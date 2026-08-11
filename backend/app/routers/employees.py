@@ -1,12 +1,16 @@
 import uuid
+import shutil
+from pathlib import Path
+from tempfile import NamedTemporaryFile
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, UploadFile, File
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.schemas.employee import EmployeeCreate, EmployeeUpdate, EmployeeOut
 from app.schemas.mobile_number import MobileNumberCreate, MobileNumberOut, MobileNumberUpdate
 from app.services import employee_service
+from app.services.employee_sheet_sync import sync_employee_sheet
 
 router = APIRouter(prefix="/employees", tags=["employees"])
 
@@ -56,3 +60,23 @@ def remove_mobile_number(employee_id: uuid.UUID, number_id: uuid.UUID, db: Sessi
 @router.put("/mobile-numbers/{number_id}/project-label", response_model=MobileNumberOut)
 def update_mobile_number_project_label(number_id: uuid.UUID, payload: MobileNumberUpdate, db: Session = Depends(get_db)):
     return employee_service.update_mobile_number_project_label(db, number_id, payload.project_label)
+
+
+@router.post("/import")
+async def import_employee_sheet(
+    file: UploadFile = File(..., description="The Master sheet Excel export — treated as the full, current roster"),
+    db: Session = Depends(get_db),
+):
+    """
+    Syncs the roster from an uploaded sheet — see employee_sheet_sync.py
+    for exactly what this does (update in place, retire what's missing,
+    never delete). Same logic the CLI script uses, so both paths always
+    behave identically.
+    """
+    with NamedTemporaryFile(suffix=".xlsx", delete=False) as tmp:
+        shutil.copyfileobj(file.file, tmp)
+        tmp_path = tmp.name
+    try:
+        return sync_employee_sheet(db, tmp_path)
+    finally:
+        Path(tmp_path).unlink(missing_ok=True)

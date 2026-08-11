@@ -92,3 +92,14 @@ export async function deleteDialogDataBillPeriod(billPeriodId: string): Promise<
     throw new Error(body.detail || `Delete failed (${res.status})`);
   }
 }
+
+export async function importDialogDataEmployeeSheet(file: File): Promise<any> {
+  const formData = new FormData();
+  formData.append("file", file);
+  const res = await fetch(`${BASE_URL}/dialog-data/employees/import`, { method: "POST", body: formData });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.detail || `Import failed (${res.status})`);
+  }
+  return res.json();
+}

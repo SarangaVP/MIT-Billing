@@ -2,27 +2,28 @@
 One-time import: reads the 'Master sheet' tab from the existing manually
 maintained Excel file and loads it into employees + mobile_numbers.
 
-The sheet actually contains TWO tables stacked on top of each other:
+The sheet's main table (row 1 header: Mobile No | EMP No | Name | LOB |
+Cadre | Credit Limit | Level | Email | ...) is the ONLY section read.
 
-  1. The main employee list (row 1 header: Mobile No | EMP No | Name | LOB |
-     Cadre | Credit Limit | Level | Email | ...)
+A second block below it, labeled "Additional common connection", was
+originally treated as containing extra numbers not present in the main
+table — but a direct check against the real file confirmed EVERY one of
+its 9 real rows is already a duplicate of something in the main table
+(0 genuinely unique rows). It's a redundant confirmation listing, not a
+source of additional data, so it's deliberately not read at all.
 
-  2. A second block, labeled "Additional common connection", listing extra
-     mobile numbers for EMP Nos that already exist in table 1 (e.g. an
-     employee with a second project line) — but its columns are SHIFTED
-     one position to the right compared to table 1:
-         (blank) | Mobile No | EMP No | Name | LOB | Cadre
-
-Reading the whole sheet with one fixed column mapping silently drops table
-2's data (its real mobile numbers land in the wrong column). This script
-detects the "Additional common connection" marker and parses each block
-with its own correct column layout.
-
-Some EMP Nos in table 2 are the literal text "General" — these represent
-pooled/shared lines (e.g. security post phones, a shared data bucket) not
-tied to one named person. Per decision: these are SET ASIDE for now, not
-imported as employees, and reported separately so they can be handled
-deliberately later.
+Some EMP Nos in the main table are the literal text "General" — these
+represent pooled/shared lines (e.g. security post phones, a shared data
+bucket) not tied to one named person. Confirmed real case: 5 such rows
+(Security 1/3/4, Driver Perera, Data bucket) all share this literal EMP
+No — without excluding them, they'd get grouped together as one garbled
+"employee" (whichever row's Name/LOB happened to be read first stands in
+for all 5). Each gets its OWN synthetic EMP No (keyed by mobile number,
+since these are distinct unrelated lines, not one person) and is stored
+as a real employee with is_shared_line=True — this used to just report
+them and discard the data, which meant any bill charge on one of these
+lines showed as an unattributed "Unmatched number" instead of its real
+label.
 
 Only NaN / a truly empty cell is converted to NULL. Everything else —
 including literal "#N/A" text, 0s, or stray characters — is imported
@@ -90,26 +91,30 @@ def to_text(value):
     return str(value)
 
 
-def load_raw_rows(xlsx_path: str):
+def load_main_table_rows(xlsx_path: str):
+    """
+    Returns only the main table's rows — everything from row 2 up to (but
+    not including) the "Additional common connection" marker, if present.
+    Deliberately stops there; see the module docstring for why.
+    """
     wb = openpyxl.load_workbook(xlsx_path, data_only=True)
     ws = wb["Master sheet"]
-    return [list(row) for row in ws.iter_rows(min_row=1, max_row=ws.max_row, values_only=True)]
+    rows = [list(row) for row in ws.iter_rows(min_row=1, max_row=ws.max_row, values_only=True)]
 
-
-def find_marker_row_index(rows, marker_text):
+    marker_idx = None
     for i, row in enumerate(rows):
         for cell in row:
-            if isinstance(cell, str) and cell.strip() == marker_text:
-                return i
-    return None
+            if isinstance(cell, str) and cell.strip() == ADDITIONAL_BLOCK_MARKER:
+                marker_idx = i
+                break
+        if marker_idx is not None:
+            break
+
+    return rows[1:marker_idx] if marker_idx is not None else rows[1:]   # skip header row
 
 
 def main(xlsx_path: str):
-    rows = load_raw_rows(xlsx_path)
-    marker_idx = find_marker_row_index(rows, ADDITIONAL_BLOCK_MARKER)
-
-    main_rows = rows[1:marker_idx] if marker_idx is not None else rows[1:]   # skip header row
-    additional_rows = rows[marker_idx + 1:] if marker_idx is not None else []
+    main_rows = load_main_table_rows(xlsx_path)
 
     Base.metadata.create_all(bind=engine)
     db = SessionLocal()
@@ -119,15 +124,12 @@ def main(xlsx_path: str):
     skipped_duplicate_employees = 0
     duplicate_number_details = []
     unresolved_placeholder_rows = []
-    unmatched_additional_rows = []
     no_number_employees = []
 
     try:
         existing_emp_nos = {e.emp_no for e in db.query(Employee.emp_no).all()}
         existing_mobile_nos = {m.mobile_no for m in db.query(MobileNumber.mobile_no).all()}
-        emp_no_to_employee_id = {e.emp_no: e.id for e in db.query(Employee.id, Employee.emp_no).all()}
 
-        # ---- Table 1: main employee list ----
         # Column order: Mobile No, EMP No, Name, LOB, Cadre, Credit Limit, Level, Email
         grouped = {}
         for row in main_rows:
@@ -138,6 +140,47 @@ def main(xlsx_path: str):
 
             if not emp_no:
                 skipped_missing += 1
+                continue
+
+            if emp_no in UNRESOLVED_EMP_NO_PLACEHOLDERS:
+                # A shared/pooled line, not a real named employee — the
+                # source sheet uses the literal text "General" for these
+                # instead of a real EMP No. Each gets its own synthetic
+                # EMP No (keyed by mobile number, since these 5 rows are
+                # 5 DISTINCT unrelated lines, not one person — grouping
+                # them by the shared literal "General" text was exactly
+                # the original bug). Uses the SAME row-reading logic as a
+                # regular employee, so real values already in the sheet
+                # (credit_limit, cadre, etc.) are preserved as-is.
+                mobile_no_str = to_text(raw_mobile_no)
+                if not mobile_no_str:
+                    skipped_missing += 1
+                    continue
+
+                synthetic_emp_no = f"GENERAL-{mobile_no_str}"
+                unresolved_placeholder_rows.append((mobile_no_str, emp_no, base_name))
+
+                if synthetic_emp_no in existing_emp_nos or mobile_no_str in existing_mobile_nos:
+                    continue  # already imported on a previous run
+
+                shared_line_employee = Employee(
+                    emp_no=synthetic_emp_no,
+                    name=base_name,
+                    lob=clean(row[3] if len(row) > 3 else None),
+                    cadre=clean(row[4] if len(row) > 4 else None),
+                    credit_limit=clean(row[5] if len(row) > 5 else None),
+                    level=clean(row[6] if len(row) > 6 else None),
+                    email=clean(row[7] if len(row) > 7 else None),
+                    resignation=clean(row[8] if len(row) > 8 else None),
+                    is_shared_line=True,
+                )
+                db.add(shared_line_employee)
+                db.flush()
+                db.add(MobileNumber(employee_id=shared_line_employee.id, mobile_no=mobile_no_str, is_primary=True))
+                existing_emp_nos.add(synthetic_emp_no)
+                existing_mobile_nos.add(mobile_no_str)
+                inserted_employees += 1
+                inserted_numbers += 1
                 continue
 
             grouped.setdefault(emp_no, {"rows": [], "first": row, "clean_name_row": None})
@@ -184,7 +227,6 @@ def main(xlsx_path: str):
             db.add(employee)
             db.flush()
             inserted_employees += 1
-            emp_no_to_employee_id[emp_no] = employee.id
 
             if not data["rows"]:
                 no_number_employees.append((emp_no, employee.name))
@@ -209,32 +251,6 @@ def main(xlsx_path: str):
                 existing_mobile_nos.add(mobile_no)
                 inserted_numbers += 1
 
-        # ---- Table 2: "Additional common connection" (shifted columns) ----
-        # Column order: (blank), Mobile No, EMP No, Name, LOB, Cadre
-        for row in additional_rows:
-            mobile_no = to_text(clean(row[1] if len(row) > 1 else None))
-            emp_no = to_text(clean(row[2] if len(row) > 2 else None))
-
-            if not mobile_no or not emp_no:
-                continue  # trailing blank rows
-
-            if emp_no in UNRESOLVED_EMP_NO_PLACEHOLDERS:
-                unresolved_placeholder_rows.append((mobile_no, emp_no, clean(row[3] if len(row) > 3 else None)))
-                continue
-
-            employee_id = emp_no_to_employee_id.get(emp_no)
-            if not employee_id:
-                unmatched_additional_rows.append((mobile_no, emp_no))
-                continue
-
-            if mobile_no in existing_mobile_nos:
-                duplicate_number_details.append((emp_no, mobile_no, "already used elsewhere"))
-                continue
-
-            db.add(MobileNumber(employee_id=employee_id, mobile_no=mobile_no, is_primary=False))
-            existing_mobile_nos.add(mobile_no)
-            inserted_numbers += 1
-
         db.commit()
     finally:
         db.close()
@@ -248,15 +264,10 @@ def main(xlsx_path: str):
         for emp_no, mobile_no, reason in duplicate_number_details:
             print(f"  - {mobile_no} for EMP No {emp_no} ({reason})")
 
-    if unmatched_additional_rows:
-        print(f"\n{len(unmatched_additional_rows)} row(s) in 'Additional common connection' referenced an EMP No not found anywhere:")
-        for mobile_no, emp_no in unmatched_additional_rows:
-            print(f"  - {mobile_no} -> EMP No {emp_no}")
-
     if unresolved_placeholder_rows:
-        print(f"\n{len(unresolved_placeholder_rows)} row(s) SET ASIDE (EMP No is a placeholder like 'General', not a real employee) — decide how to handle these later:")
+        print(f"\n{len(unresolved_placeholder_rows)} shared/pooled line(s) imported as their own employee record (EMP No 'General' in the source sheet):")
         for mobile_no, emp_no, label in unresolved_placeholder_rows:
-            print(f"  - {mobile_no} (EMP No: {emp_no}, label: {label})")
+            print(f"  - {mobile_no} -> {label} (synthetic EMP No: GENERAL-{mobile_no})")
 
     if no_number_employees:
         print(f"\n{len(no_number_employees)} employee(s) imported with NO mobile number (source sheet had a placeholder like 'No'):")

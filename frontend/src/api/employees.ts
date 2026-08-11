@@ -63,3 +63,14 @@ export function updateMobileNumberProjectLabel(numberId: string, projectLabel: s
     body: JSON.stringify({ project_label: projectLabel }),
   });
 }
+
+export async function importEmployeeSheet(file: File): Promise<any> {
+  const formData = new FormData();
+  formData.append("file", file);
+  const res = await fetch(`${BASE_URL}/employees/import`, { method: "POST", body: formData });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.detail || `Import failed (${res.status})`);
+  }
+  return res.json();
+}
