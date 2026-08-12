@@ -47,23 +47,63 @@ def _build_column_map(header_row) -> dict[str, int]:
 
 
 def _load_lob_codes_from_separate_sheet(wb) -> dict[str, str]:
+    """
+    Fallback for the OLDER format — cross-references the separate 'LOB'
+    sheet by EMP No. Confirmed this sheet's real header uses 'EMP#', not
+    'EMP No', AND has TWO columns both literally named 'LOB' (the first
+    has real #N/A errors, the second is reliable — same finding as the
+    original investigation). Since dict comprehension keeps the LAST
+    occurrence for a repeated key, mapping by header name lands on the
+    second (reliable) "LOB" column automatically, without needing a
+    hardcoded position — but this is documented explicitly here so it's
+    not a silent coincidence.
+    """
     if "LOB" not in wb.sheetnames:
         return {}
     ws = wb["LOB"]
+
+    header_row_num = None
+    col_map: dict[str, int] = {}
+    for row in ws.iter_rows(min_row=1, max_row=5):
+        values = [str(c.value).strip().lower() if c.value else None for c in row]
+        if "emp#" in values and "name" in values:
+            header_row_num = row[0].row
+            col_map = {v: i for i, v in enumerate(values) if v}
+            break
+    if header_row_num is None:
+        return {}
+
+    emp_no_idx = col_map.get("emp#")
+    lob_idx = col_map.get("lob")   # last occurrence wins -> the reliable second "LOB" column
+    if emp_no_idx is None or lob_idx is None:
+        return {}
+
     codes: dict[str, str] = {}
-    for row in ws.iter_rows(min_row=2, max_row=1000, values_only=True):
-        emp_no = to_str(row[1]) if len(row) > 1 else None
-        lob_code = to_str(row[7]) if len(row) > 7 else None
+    for row in ws.iter_rows(min_row=header_row_num + 1, max_row=1000, values_only=True):
+        emp_no = to_str(row[emp_no_idx]) if emp_no_idx < len(row) else None
+        lob_code = to_str(row[lob_idx]) if lob_idx < len(row) else None
         if emp_no and lob_code:
             codes[emp_no] = lob_code
     return codes
+
+
+def _find_header_row(ws) -> tuple[int, list]:
+    """Searches the first few rows for the real header, rather than
+    assuming it's always exactly row 1 — same defensive pattern applied
+    to Mobitel's Master sheet and the Portal sheet after confirming a
+    real title-row shift can happen in this workbook family."""
+    for row in ws.iter_rows(min_row=1, max_row=5):
+        values = [str(c.value).strip().lower() if c.value else None for c in row]
+        if "connection no" in values and "emp no" in values and "employee" in values:
+            return row[0].row, [c.value for c in row]
+    raise ValueError("Could not find a header row containing 'Connection No', 'EMP No', and 'Employee' in the first 5 rows")
 
 
 def sync_dialog_data_sheet(db: Session, xlsx_path: str) -> dict:
     wb = openpyxl.load_workbook(xlsx_path, data_only=True)
     ws = wb["Master sheet"]
 
-    header_row = next(ws.iter_rows(min_row=1, max_row=1, values_only=True))
+    header_row_num, header_row = _find_header_row(ws)
     col_map = _build_column_map(header_row)
 
     connection_idx = col_map.get("connection no")
@@ -81,7 +121,7 @@ def sync_dialog_data_sheet(db: Session, xlsx_path: str) -> dict:
     grouped: dict[str, dict] = {}
     skipped_missing = 0
 
-    for row in ws.iter_rows(min_row=2, max_row=1000, values_only=True):
+    for row in ws.iter_rows(min_row=header_row_num + 1, max_row=1000, values_only=True):
         connection_no = row[connection_idx] if connection_idx is not None and connection_idx < len(row) else None
         emp_no = row[emp_no_idx] if emp_no_idx is not None and emp_no_idx < len(row) else None
         name = row[name_idx] if name_idx is not None and name_idx < len(row) else None

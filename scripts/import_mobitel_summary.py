@@ -77,11 +77,24 @@ def _build_column_map(header_row) -> dict[str, int]:
     return col_map
 
 
+def _find_header_row(ws) -> tuple[int, list]:
+    """Searches the first few rows for the real header, rather than
+    assuming it's always exactly row 1 — same defensive pattern as the
+    Portal sheet fix (that sheet, in this same workbook, once had a
+    title row above its header, which a fixed-row assumption would have
+    silently misread)."""
+    for row in ws.iter_rows(min_row=1, max_row=5):
+        values = [str(c.value).strip().lower() if c.value else None for c in row]
+        if "number" in values and "emp no" in values and "name" in values:
+            return row[0].row, [c.value for c in row]
+    raise ValueError("Could not find a header row containing 'Number', 'EMP No', and 'Name' in the first 5 rows")
+
+
 def main(xlsx_path: str):
     wb = openpyxl.load_workbook(xlsx_path, data_only=True)
     ws = wb["Master sheet"]
 
-    header_row = next(ws.iter_rows(min_row=1, max_row=1, values_only=True))
+    header_row_num, header_row = _find_header_row(ws)
     col_map = _build_column_map(header_row)
 
     mobile_idx = col_map.get("number")
@@ -111,7 +124,7 @@ def main(xlsx_path: str):
         for conn in db.query(MobitelConnection).filter(MobitelConnection.is_deleted.is_(False)).all():
             employee_by_mobile[conn.mobile_no] = conn.employee
 
-        for row in ws.iter_rows(min_row=2, max_row=1000, values_only=True):
+        for row in ws.iter_rows(min_row=header_row_num + 1, max_row=1000, values_only=True):
             mobile_no = row[mobile_idx] if mobile_idx < len(row) else None
             emp_no = row[emp_no_idx] if emp_no_idx < len(row) else None
             name = row[name_idx] if name_idx < len(row) else None

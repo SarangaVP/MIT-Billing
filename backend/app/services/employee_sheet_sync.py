@@ -65,13 +65,54 @@ def to_text(value):
     return None if value is None else str(value)
 
 
-def load_main_table_rows(xlsx_path: str):
+def load_main_table_rows(xlsx_path: str) -> list[dict]:
+    """
+    Returns a list of dicts (one per real data row), keyed by normalized
+    header name — e.g. row["mobile no"], row["emp no"] — instead of
+    fixed positions. Confirmed real risk this replaces: the previous
+    version read row[0] through row[8] with ZERO verification that
+    column 4 was actually "Cadre", column 7 actually "Email", etc. — if
+    the sheet's column order ever changed, this would have silently
+    corrupted data with no error at all (the same failure mode already
+    confirmed and fixed for the Portal sheet elsewhere in this project).
+
+    Also handles a CONFIRMED real typo in the source file's own header:
+    the Email column is literally spelled "Emaill" (double-L), not
+    "Email" — both spellings are accepted and mapped to the same field,
+    so a future corrected spelling wouldn't silently break this either.
+    """
     wb = openpyxl.load_workbook(xlsx_path, data_only=True)
     ws = wb["Master sheet"]
-    rows = [list(row) for row in ws.iter_rows(min_row=1, max_row=ws.max_row, values_only=True)]
+
+    header_row_num = None
+    col_map: dict[str, int] = {}
+    for row in ws.iter_rows(min_row=1, max_row=5):
+        values = [str(c.value).strip().lower() if c.value else None for c in row]
+        if "mobile no" in values and "emp no" in values and "name" in values:
+            header_row_num = row[0].row
+            col_map = {v: i for i, v in enumerate(values) if v}
+            break
+    if header_row_num is None:
+        raise ValueError("Could not find a header row containing 'Mobile No', 'EMP No', and 'Name' in the first 5 rows")
+
+    email_idx = col_map.get("email", col_map.get("emaill"))   # confirmed real header typo: "Emaill"
+
+    field_columns = {
+        "mobile no": col_map.get("mobile no"),
+        "emp no": col_map.get("emp no"),
+        "name": col_map.get("name"),
+        "lob": col_map.get("lob"),
+        "cadre": col_map.get("cadre"),
+        "credit limit": col_map.get("credit limit"),
+        "level": col_map.get("level"),
+        "email": email_idx,
+        "resignation": col_map.get("resignation"),
+    }
+
+    all_rows = list(ws.iter_rows(min_row=header_row_num + 1, max_row=ws.max_row, values_only=True))
 
     marker_idx = None
-    for i, row in enumerate(rows):
+    for i, row in enumerate(all_rows):
         for cell in row:
             if isinstance(cell, str) and cell.strip() == ADDITIONAL_BLOCK_MARKER:
                 marker_idx = i
@@ -79,7 +120,15 @@ def load_main_table_rows(xlsx_path: str):
         if marker_idx is not None:
             break
 
-    return rows[1:marker_idx] if marker_idx is not None else rows[1:]
+    main_rows = all_rows[:marker_idx] if marker_idx is not None else all_rows
+
+    def row_to_dict(row: tuple) -> dict:
+        return {
+            field: (row[idx] if idx is not None and idx < len(row) else None)
+            for field, idx in field_columns.items()
+        }
+
+    return [row_to_dict(row) for row in main_rows]
 
 
 def sync_employee_sheet(db: Session, xlsx_path: str) -> dict:
@@ -100,9 +149,9 @@ def sync_employee_sheet(db: Session, xlsx_path: str) -> dict:
     conflicts: list[tuple[str, str, str]] = []
 
     for row in main_rows:
-        raw_mobile_no = clean(row[0] if len(row) > 0 else None)
-        emp_no = to_text(clean(row[1] if len(row) > 1 else None))
-        raw_name = clean(row[2] if len(row) > 2 else None)
+        raw_mobile_no = clean(row["mobile no"])
+        emp_no = to_text(clean(row["emp no"]))
+        raw_name = clean(row["name"])
         base_name, project_label = split_name_and_project_label(raw_name)
 
         if not emp_no:
@@ -134,14 +183,14 @@ def sync_employee_sheet(db: Session, xlsx_path: str) -> dict:
     numbers_added, numbers_retired, numbers_reactivated = 0, 0, 0
 
     def upsert_employee_fields(employee: Employee, source_row, synthetic_name: str | None = None, is_shared: bool = False):
-        clean_name, _ = split_name_and_project_label(clean(source_row[2] if len(source_row) > 2 else None))
+        clean_name, _ = split_name_and_project_label(clean(source_row["name"]))
         employee.name = synthetic_name if synthetic_name is not None else clean_name
-        employee.lob = clean(source_row[3] if len(source_row) > 3 else None)
-        employee.cadre = clean(source_row[4] if len(source_row) > 4 else None)
-        employee.credit_limit = clean(source_row[5] if len(source_row) > 5 else None)
-        employee.level = clean(source_row[6] if len(source_row) > 6 else None)
-        employee.email = clean(source_row[7] if len(source_row) > 7 else None)
-        employee.resignation = clean(source_row[8] if len(source_row) > 8 else None)
+        employee.lob = clean(source_row["lob"])
+        employee.cadre = clean(source_row["cadre"])
+        employee.credit_limit = clean(source_row["credit limit"])
+        employee.level = clean(source_row["level"])
+        employee.email = clean(source_row["email"])
+        employee.resignation = clean(source_row["resignation"])
         employee.is_shared_line = is_shared
 
     # ---- Regular employees ----
