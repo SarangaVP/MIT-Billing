@@ -6,6 +6,7 @@ import MobitelManageStaticIpPanel from "../components/MobitelManageStaticIpPanel
 import MobitelManageProjectCostPanel from "../components/MobitelManageProjectCostPanel";
 import MobitelConfirmPanel from "../components/MobitelConfirmPanel";
 import { exportTeamCostToExcel } from "../../utils/exportTeamCost";
+import { exportTableToExcel } from "../../utils/exportTable";
 
 export default function MobitelBillsPage() {
   const [periods, setPeriods] = useState<MobitelBillPeriod[]>([]);
@@ -113,6 +114,46 @@ export default function MobitelBillsPage() {
   // glance rather than only available as a single "off by Rs. X" pill.
   const sumOfLineItems = summaryRows.reduce((sum, r) => sum + Number(r.total), 0);
 
+  function handleExport() {
+    if (!selectedPeriod) return;
+    const headers = [
+      "EMP No", "Name", "Mobile No", "LOB", "LOB Code",
+      ...(hasUsageData
+        ? ["IMSI", "Data Allocated (Mb)", "Data Available (Mb)", "Data Utilized (Mb)", "Daily Limit (Mb)", "Member Status"]
+        : []),
+      "Data Cost", "Project Cost", "Static IP Cost", "Total",
+    ];
+    const rows = filteredRows.map((row) => [
+      row.emp_no ?? "", row.name ?? "", row.mobile_no ?? "", row.lob ?? "", row.lob_code ?? "",
+      ...(hasUsageData
+        ? [
+            row.imsi_number ?? "",
+            row.data_volume_mb != null ? Number(row.data_volume_mb) : "",
+            row.available_data_volume_mb != null ? Number(row.available_data_volume_mb) : "",
+            row.utilized_data_volume_mb != null ? Number(row.utilized_data_volume_mb) : "",
+            row.daily_limit_mb != null ? Number(row.daily_limit_mb) : "",
+            row.member_status ?? "",
+          ]
+        : []),
+      Number(row.data_cost), row.is_project_cost ? "Yes" : "No",
+      Number(row.static_ip_cost), Number(row.total),
+    ]);
+    const totalsRow = [
+      "Total", "", "", "", "",
+      ...(hasUsageData ? ["", "", "", "", "", ""] : []),
+      Number(filteredRows.reduce((s, r) => s + Number(r.data_cost), 0).toFixed(2)),
+      "",
+      Number(filteredRows.reduce((s, r) => s + Number(r.static_ip_cost), 0).toFixed(2)),
+      Number(filteredRows.reduce((s, r) => s + Number(r.total), 0).toFixed(2)),
+    ];
+    exportTableToExcel(
+      headers,
+      [...rows, totalsRow],
+      `MobitelData_${selectedPeriod.label.replace(/\s+/g, "_")}_summary.xlsx`,
+      "Summary"
+    );
+  }
+
   if (selectedPeriod) {
     return (
       <div className="page">
@@ -139,6 +180,9 @@ export default function MobitelBillsPage() {
             </button>
             <button className="btn btn-ghost" onClick={() => setShowBreakdown((v) => !v)}>
               {showBreakdown ? "Hide" : "Show"} team cost & reconciliation
+            </button>
+            <button className="btn btn-ghost" onClick={handleExport}>
+              Export to Excel
             </button>
           </div>
         </div>
