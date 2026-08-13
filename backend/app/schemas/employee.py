@@ -41,7 +41,7 @@ class EmployeeUpdate(BaseModel):
 class EmployeeOut(EmployeeBase):
     id: uuid.UUID
     is_deleted: bool
-    is_shared_line: bool
+    is_general_line: bool
     created_at: datetime
     updated_at: datetime
     mobile_numbers: list[MobileNumberOut] = []

@@ -30,12 +30,12 @@ class Employee(Base):
     # structured status/date — edited directly, same as every other field.
     resignation = Column(String, nullable=True)
 
-    # True for a synthetic entry representing a shared/pooled line (e.g.
-    # a security post phone, a driver's phone) that has no real named
-    # employee behind it — the source sheet marks these with the literal
-    # text "General" in the EMP No column, not a real EMP No. Confirmed
-    # 5 real cases: Security 1/3/4, Driver Perera, Data bucket.
-    is_shared_line = Column(Boolean, nullable=False, default=False)
+    # True for a synthetic entry representing a pooled "General"
+    # line (e.g. a security post phone, a driver's phone) that has no real
+    # named employee behind it — the source sheet marks these with the
+    # literal text "General" in the EMP No column, not a real EMP No.
+    # Confirmed 5 real cases: Security 1/3/4, Driver Perera, Data bucket.
+    is_general_line = Column(Boolean, nullable=False, default=False)
 
     is_deleted = Column(Boolean, nullable=False, default=False)
 

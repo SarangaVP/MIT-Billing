@@ -13,14 +13,14 @@ its 9 real rows is already a duplicate of something in the main table
 source of additional data, so it's deliberately not read at all.
 
 Some EMP Nos in the main table are the literal text "General" — these
-represent pooled/shared lines (e.g. security post phones, a shared data
-bucket) not tied to one named person. Confirmed real case: 5 such rows
-(Security 1/3/4, Driver Perera, Data bucket) all share this literal EMP
-No — without excluding them, they'd get grouped together as one garbled
-"employee" (whichever row's Name/LOB happened to be read first stands in
-for all 5). Each gets its OWN synthetic EMP No (keyed by mobile number,
-since these are distinct unrelated lines, not one person) and is stored
-as a real employee with is_shared_line=True — this used to just report
+represent pooled "General" lines (e.g. security post phones, a shared
+data bucket) not tied to one named person. Confirmed real case: 5 such
+rows (Security 1/3/4, Driver Perera, Data bucket) all share this literal
+EMP No — without excluding them, they'd get grouped together as one
+garbled "employee" (whichever row's Name/LOB happened to be read first
+stands in for all 5). Each gets its OWN synthetic EMP No (keyed by mobile
+number, since these are distinct unrelated lines, not one person) and is
+stored as a real employee with is_general_line=True — this used to just report
 them and discard the data, which meant any bill charge on one of these
 lines showed as an unattributed "Unmatched number" instead of its real
 label.
@@ -187,7 +187,7 @@ def main(xlsx_path: str):
                 continue
 
             if emp_no in UNRESOLVED_EMP_NO_PLACEHOLDERS:
-                # A shared/pooled line, not a real named employee — the
+                # A "General" line, not a real named employee — the
                 # source sheet uses the literal text "General" for these
                 # instead of a real EMP No. Each gets its own synthetic
                 # EMP No (keyed by mobile number, since these 5 rows are
@@ -207,7 +207,7 @@ def main(xlsx_path: str):
                 if synthetic_emp_no in existing_emp_nos or mobile_no_str in existing_mobile_nos:
                     continue  # already imported on a previous run
 
-                shared_line_employee = Employee(
+                general_line_employee = Employee(
                     emp_no=synthetic_emp_no,
                     name=base_name,
                     lob=clean(row["lob"]),
@@ -216,11 +216,11 @@ def main(xlsx_path: str):
                     level=clean(row["level"]),
                     email=clean(row["email"]),
                     resignation=clean(row["resignation"]),
-                    is_shared_line=True,
+                    is_general_line=True,
                 )
-                db.add(shared_line_employee)
+                db.add(general_line_employee)
                 db.flush()
-                db.add(MobileNumber(employee_id=shared_line_employee.id, mobile_no=mobile_no_str, is_primary=True))
+                db.add(MobileNumber(employee_id=general_line_employee.id, mobile_no=mobile_no_str, is_primary=True))
                 existing_emp_nos.add(synthetic_emp_no)
                 existing_mobile_nos.add(mobile_no_str)
                 inserted_employees += 1
@@ -309,7 +309,7 @@ def main(xlsx_path: str):
             print(f"  - {mobile_no} for EMP No {emp_no} ({reason})")
 
     if unresolved_placeholder_rows:
-        print(f"\n{len(unresolved_placeholder_rows)} shared/pooled line(s) imported as their own employee record (EMP No 'General' in the source sheet):")
+        print(f"\n{len(unresolved_placeholder_rows)} 'General' line(s) imported as their own employee record (EMP No 'General' in the source sheet):")
         for mobile_no, emp_no, label in unresolved_placeholder_rows:
             print(f"  - {mobile_no} -> {label} (synthetic EMP No: GENERAL-{mobile_no})")
 

@@ -21,7 +21,7 @@ even after a soft delete), this UPDATES existing rows in place:
     roster, but nothing about their history is touched.
 
 Shares its row-parsing logic (project label splitting, "General"
-shared-line handling, header structure) with import_master_sheet.py —
+line handling, header structure) with import_master_sheet.py —
 kept as a single source of truth so the CLI script and the web upload
 endpoint can never drift apart.
 """
@@ -144,7 +144,7 @@ def sync_employee_sheet(db: Session, xlsx_path: str) -> dict:
     # Group real (non-"General") rows by EMP No first, same as before —
     # one employee can have multiple rows (multiple numbers).
     grouped: dict[str, dict] = {}
-    shared_line_rows: list[tuple[str, str, str | None]] = []   # (mobile_no, base_name, source_row)
+    general_line_rows: list[tuple[str, str, str | None]] = []   # (mobile_no, base_name, source_row)
     skipped_missing = 0
     conflicts: list[tuple[str, str, str]] = []
 
@@ -163,7 +163,7 @@ def sync_employee_sheet(db: Session, xlsx_path: str) -> dict:
             if not mobile_no_str:
                 skipped_missing += 1
                 continue
-            shared_line_rows.append((mobile_no_str, base_name, row))
+            general_line_rows.append((mobile_no_str, base_name, row))
             continue
 
         grouped.setdefault(emp_no, {"rows": [], "first": row, "clean_name_row": None})
@@ -182,7 +182,7 @@ def sync_employee_sheet(db: Session, xlsx_path: str) -> dict:
     inserted, updated, revived, retired_employees = 0, 0, 0, 0
     numbers_added, numbers_retired, numbers_reactivated = 0, 0, 0
 
-    def upsert_employee_fields(employee: Employee, source_row, synthetic_name: str | None = None, is_shared: bool = False):
+    def upsert_employee_fields(employee: Employee, source_row, synthetic_name: str | None = None, is_general: bool = False):
         clean_name, _ = split_name_and_project_label(clean(source_row["name"]))
         employee.name = synthetic_name if synthetic_name is not None else clean_name
         employee.lob = clean(source_row["lob"])
@@ -191,7 +191,7 @@ def sync_employee_sheet(db: Session, xlsx_path: str) -> dict:
         employee.level = clean(source_row["level"])
         employee.email = clean(source_row["email"])
         employee.resignation = clean(source_row["resignation"])
-        employee.is_shared_line = is_shared
+        employee.is_general_line = is_general
 
     # ---- Regular employees ----
     for emp_no, data in grouped.items():
@@ -240,15 +240,15 @@ def sync_employee_sheet(db: Session, xlsx_path: str) -> dict:
                 number.status = MobileNumberStatus.inactive
                 numbers_retired += 1
 
-    # ---- Shared/pooled "General" lines — each is its own synthetic employee ----
-    for mobile_no, base_name, source_row in shared_line_rows:
+    # ---- "General" lines — each is its own synthetic employee ----
+    for mobile_no, base_name, source_row in general_line_rows:
         synthetic_emp_no = f"GENERAL-{mobile_no}"
         emp_nos_in_upload.add(synthetic_emp_no)
         existing = employee_by_emp_no.get(synthetic_emp_no)
 
         if existing is None:
             employee = Employee(emp_no=synthetic_emp_no)
-            upsert_employee_fields(employee, source_row, synthetic_name=base_name, is_shared=True)
+            upsert_employee_fields(employee, source_row, synthetic_name=base_name, is_general=True)
             db.add(employee)
             db.flush()
             employee_by_emp_no[synthetic_emp_no] = employee
@@ -259,7 +259,7 @@ def sync_employee_sheet(db: Session, xlsx_path: str) -> dict:
             inserted += 1
         else:
             was_deleted = existing.is_deleted
-            upsert_employee_fields(existing, source_row, synthetic_name=base_name, is_shared=True)
+            upsert_employee_fields(existing, source_row, synthetic_name=base_name, is_general=True)
             existing.is_deleted = False
             if was_deleted:
                 revived += 1
