@@ -18,6 +18,8 @@ export interface BillPeriod {
   source_format: SourceFormat;
   reconciled: boolean;
   reconciliation_discrepancy: string | null;
+  bucket_cost_override: string | null;
+  bucket_vat_override: string | null;
   created_at: string;
 }
 
@@ -78,4 +80,9 @@ export interface ApprovalOverrideInput {
 
 export interface BucketExclusionInput {
   is_bucket_excluded: boolean;
+}
+
+export interface BucketRateOverrideInput {
+  bucket_cost_override: number | null;
+  bucket_vat_override: number | null;
 }

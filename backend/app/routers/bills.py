@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, UploadFile, File, Form, HTTPException
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.schemas.bill import ImportResult, BillSummaryRow, ApprovalOverrideInput, BucketExclusionInput, BillPeriodOut
+from app.schemas.bill import ImportResult, BillSummaryRow, ApprovalOverrideInput, BucketExclusionInput, BucketRateOverrideInput, BillPeriodOut
 from app.services import bill_service
 
 router = APIRouter(prefix="/bills", tags=["bills"])
@@ -62,6 +62,16 @@ def delete_bill_period(bill_period_id: uuid.UUID, db: Session = Depends(get_db))
 @router.put("/line-items/{line_item_id}/approval-override", response_model=BillSummaryRow)
 def set_approval_override(line_item_id: uuid.UUID, payload: ApprovalOverrideInput, db: Session = Depends(get_db)):
     return bill_service.set_approval_override(db, line_item_id, payload)
+
+
+@router.put("/{bill_period_id}/bucket-rate-override", response_model=list[BillSummaryRow])
+def set_bucket_rate_override(bill_period_id: uuid.UUID, payload: BucketRateOverrideInput, db: Session = Depends(get_db)):
+    """
+    Sets (or clears, if both fields are null) a bucket rate that applies
+    ONLY to this bill period — unlike the standard rate table, which
+    applies from its effective date forward to every later month too.
+    """
+    return bill_service.set_bucket_rate_override(db, bill_period_id, payload.bucket_cost_override, payload.bucket_vat_override)
 
 
 @router.put("/line-items/{line_item_id}/bucket-exclusion", response_model=BillSummaryRow)

@@ -1,4 +1,4 @@
-import type { BillPeriod, ImportResult, BillSummaryRow, ApprovalOverrideInput, BucketExclusionInput } from "../types/bill";
+import type { BillPeriod, ImportResult, BillSummaryRow, ApprovalOverrideInput, BucketExclusionInput, BucketRateOverrideInput } from "../types/bill";
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
 
@@ -48,6 +48,14 @@ export function setApprovalOverride(lineItemId: string, payload: ApprovalOverrid
 
 export function setBucketExclusion(lineItemId: string, payload: BucketExclusionInput): Promise<BillSummaryRow> {
   return request<BillSummaryRow>(`/bills/line-items/${lineItemId}/bucket-exclusion`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+export function setBucketRateOverride(billPeriodId: string, payload: BucketRateOverrideInput): Promise<BillSummaryRow[]> {
+  return request<BillSummaryRow[]>(`/bills/${billPeriodId}/bucket-rate-override`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),

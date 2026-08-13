@@ -1,9 +1,3 @@
-# ============================================================
-# NOTE: Lines 1–266 of the real file are a commented-out OLD
-# version of this module (pre-existing, unrelated to this
-# change, left as-is). Showing only the ACTIVE code below.
-# ============================================================
-
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
@@ -21,7 +15,6 @@ from app.ingestion.xls_summary_parser import (
 )
 from app.models.bill_period import BillPeriod
 from app.models.bill_line_item import BillLineItem
-from app.models.bucket_rate import BucketRate
 from app.models.mobile_number import MobileNumber
 from app.models.employee import Employee
 from app.schemas.bill import BillSummaryRow, ImportResult, ApprovalOverrideInput
@@ -140,15 +133,6 @@ def import_bill_file(db: Session, file_path: str, label: str, source_format: str
     )
 
 
-def _get_active_bucket_rate(db: Session, as_of: date) -> BucketRate | None:
-    return (
-        db.query(BucketRate)
-        .filter(BucketRate.effective_from <= as_of)
-        .order_by(BucketRate.effective_from.desc())
-        .first()
-    )
-
-
 def get_bill_period(db: Session, bill_period_id: uuid.UUID) -> BillPeriod:
     period = db.query(BillPeriod).filter(BillPeriod.id == bill_period_id).first()
     if not period:
@@ -170,7 +154,7 @@ def list_bill_periods(db: Session) -> list[BillPeriod]:
 def get_summary(db: Session, bill_period_id: uuid.UUID) -> list[BillSummaryRow]:
     period = get_bill_period(db, bill_period_id)
     line_items = db.query(BillLineItem).filter(BillLineItem.bill_period_id == period.id).all()
-    return _build_summary_rows(db, line_items, as_of=period.invoice_date)
+    return _build_summary_rows(db, line_items, bill_period=period)
 
 
 def get_summary_row_for_line_item(db: Session, line_item_id: uuid.UUID) -> BillSummaryRow:
@@ -178,15 +162,17 @@ def get_summary_row_for_line_item(db: Session, line_item_id: uuid.UUID) -> BillS
     if not line_item:
         raise HTTPException(status_code=404, detail="Bill line item not found")
     period = get_bill_period(db, line_item.bill_period_id)
-    rows = _build_summary_rows(db, [line_item], as_of=period.invoice_date)
+    rows = _build_summary_rows(db, [line_item], bill_period=period)
     return rows[0]
 
 
-def _build_summary_rows(db: Session, line_items: list[BillLineItem], as_of: date | None) -> list[BillSummaryRow]:
-    as_of = as_of or datetime.utcnow().date()
-    bucket_rate = _get_active_bucket_rate(db, as_of)
-    standard_bucket_cost = bucket_rate.cost if bucket_rate else Decimal("0")
-    standard_bucket_vat = bucket_rate.vat if bucket_rate else Decimal("0")
+def _build_summary_rows(db: Session, line_items: list[BillLineItem], bill_period: BillPeriod) -> list[BillSummaryRow]:
+    # There is no standard/fallback bucket rate anymore — every bill period
+    # requires an explicit "Set bucket rate" override (set via the Bills
+    # page for that specific month). Until someone sets one, the bucket
+    # cost/VAT for that month is simply zero.
+    standard_bucket_cost = bill_period.bucket_cost_override or Decimal("0")
+    standard_bucket_vat = bill_period.bucket_vat_override or Decimal("0")
 
     mobile_nos = [li.mobile_no for li in line_items]
     number_rows = (
@@ -302,6 +288,21 @@ def set_approval_override(db: Session, line_item_id: uuid.UUID, payload: Approva
     db.commit()
     db.refresh(line_item)
     return get_summary_row_for_line_item(db, line_item_id)
+
+
+def set_bucket_rate_override(db: Session, bill_period_id: uuid.UUID, cost: Decimal | None, vat: Decimal | None) -> list[BillSummaryRow]:
+    """
+    Sets (or clears, if both are None) a bucket rate override for THIS
+    bill period only — unlike the standard rate table, this never affects
+    any other month. Recalculation is automatic: bucket_cost/bucket_vat
+    are computed live in _build_summary_rows on every read, so nothing
+    needs to be persisted per line item here.
+    """
+    period = get_bill_period(db, bill_period_id)
+    period.bucket_cost_override = cost
+    period.bucket_vat_override = vat
+    db.commit()
+    return get_summary(db, bill_period_id)
 
 
 def set_bucket_exclusion(db: Session, line_item_id: uuid.UUID, is_bucket_excluded: bool) -> BillSummaryRow:

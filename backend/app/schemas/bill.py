@@ -17,9 +17,18 @@ class BillPeriodOut(BaseModel):
     source_format: str
     reconciled: bool
     reconciliation_discrepancy: Decimal | None
+    bucket_cost_override: Decimal | None
+    bucket_vat_override: Decimal | None
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class BucketRateOverrideInput(BaseModel):
+    # Both null clears the override, reverting this bill period back to
+    # whatever rate is active in the standard rate table.
+    bucket_cost_override: Decimal | None = None
+    bucket_vat_override: Decimal | None = None
 
 
 class ImportResult(BaseModel):

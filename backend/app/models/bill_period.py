@@ -33,4 +33,12 @@ class BillPeriod(Base):
     reconciled = Column(Boolean, nullable=False, default=True)
     reconciliation_discrepancy = Column(Numeric(14, 2), nullable=True)
 
+    # Optional per-bill-period override of the bucket cost/VAT — set via
+    # "Set bucket rate" on the Bills page for that specific month. There is
+    # no fallback/standard rate anymore: if both are NULL, bucket cost and
+    # VAT are simply zero for every line item in this bill period until an
+    # override is set.
+    bucket_cost_override = Column(Numeric(12, 2), nullable=True)
+    bucket_vat_override = Column(Numeric(12, 2), nullable=True)
+
     created_at = Column(DateTime(timezone=True), server_default=func.now())

@@ -1,8 +1,9 @@
 import { useEffect, useState, useCallback } from "react";
 import type { BillPeriod, BillSummaryRow } from "../types/bill";
-import { listBillPeriods, getBillSummary, setApprovalOverride, setBucketExclusion, deleteBillPeriod } from "../api/bills";
+import { listBillPeriods, getBillSummary, setApprovalOverride, setBucketExclusion, setBucketRateOverride, deleteBillPeriod } from "../api/bills";
 import BillUploadPanel from "../components/BillUploadPanel";
 import BucketExclusionPanel from "../components/BucketExclusionPanel";
+import BucketRatePanel from "../components/BucketRatePanel";
 import ConfirmPanel from "../components/ConfirmPanel";
 import { exportTableToExcel } from "../utils/exportTable";
 
@@ -16,6 +17,7 @@ export default function BillsPage() {
   const [search, setSearch] = useState("");
   const [deletingPeriod, setDeletingPeriod] = useState<BillPeriod | null>(null);
   const [showBucketExclusionPanel, setShowBucketExclusionPanel] = useState(false);
+  const [showBucketRatePanel, setShowBucketRatePanel] = useState(false);
 
   const loadPeriods = useCallback(async () => {
     setLoadingPeriods(true);
@@ -48,6 +50,26 @@ export default function BillsPage() {
   async function handleSetBucketExclusion(lineItemId: string, isBucketExcluded: boolean) {
     const updated = await setBucketExclusion(lineItemId, { is_bucket_excluded: isBucketExcluded });
     setSummaryRows((rows) => rows.map((r) => (r.bill_line_item_id === updated.bill_line_item_id ? updated : r)));
+  }
+
+  function handleOpenBucketRatePanel() {
+    setShowBucketRatePanel(true);
+  }
+
+  async function handleSaveBucketRate(cost: number | null, vat: number | null) {
+    if (!selectedPeriod) return;
+    const rows = await setBucketRateOverride(selectedPeriod.id, {
+      bucket_cost_override: cost,
+      bucket_vat_override: vat,
+    });
+    setSummaryRows(rows);
+    setShowBucketRatePanel(false);
+    // The override lives on the bill period itself, so refresh it too —
+    // otherwise reopening this panel would show stale override values.
+    const refreshedPeriods = await listBillPeriods();
+    setPeriods(refreshedPeriods);
+    const refreshed = refreshedPeriods.find((p) => p.id === selectedPeriod.id);
+    if (refreshed) setSelectedPeriod(refreshed);
   }
 
   function approvalClass(value: string): string {
@@ -157,6 +179,9 @@ export default function BillsPage() {
             </p>
           </div>
           <div style={{ display: "flex", gap: 8 }}>
+            <button className="btn btn-ghost" onClick={handleOpenBucketRatePanel}>
+              Set bucket rate
+            </button>
             <button className="btn btn-ghost" onClick={() => setShowBucketExclusionPanel(true)}>
               Manage bucket exclusion
             </button>
@@ -309,6 +334,16 @@ export default function BillsPage() {
             rows={summaryRows}
             onSave={handleSetBucketExclusion}
             onCancel={() => setShowBucketExclusionPanel(false)}
+          />
+        )}
+
+        {showBucketRatePanel && (
+          <BucketRatePanel
+            periodLabel={selectedPeriod.label}
+            currentOverrideCost={selectedPeriod.bucket_cost_override}
+            currentOverrideVat={selectedPeriod.bucket_vat_override}
+            onSave={handleSaveBucketRate}
+            onCancel={() => setShowBucketRatePanel(false)}
           />
         )}
       </div>
