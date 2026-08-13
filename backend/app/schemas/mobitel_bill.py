@@ -46,9 +46,9 @@ class MobitelStaticIpCostUpdateInput(BaseModel):
     cost: Decimal
 
 
-class MobitelFixedCostUpdateInput(BaseModel):
-    is_fixed_cost: bool
-    fixed_cost_amount: Decimal | None = None
+class MobitelProjectCostUpdateInput(BaseModel):
+    is_project_cost: bool
+    project_cost_amount: Decimal | None = None
 
 
 class MobitelBillLineItemOut(BaseModel):
@@ -61,8 +61,8 @@ class MobitelBillLineItemOut(BaseModel):
     mobile_no: str | None
     data_cost: Decimal
     static_ip_cost: Decimal
-    is_fixed_cost: bool = False
-    fixed_cost_amount: Decimal | None = None
+    is_project_cost: bool = False
+    project_cost_amount: Decimal | None = None
     total: Decimal
 
     # Only populated when a Portal sheet was uploaded alongside the PDF

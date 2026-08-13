@@ -91,10 +91,10 @@ export function setMobitelStaticIpCost(lineItemId: string, cost: string): Promis
   });
 }
 
-export function setMobitelFixedCost(lineItemId: string, isFixedCost: boolean, fixedCostAmount: string | null): Promise<MobitelBillLineItemOut[]> {
-  return request<MobitelBillLineItemOut[]>(`/mobitel/bills/line-items/${lineItemId}/fixed-cost`, {
+export function setMobitelProjectCost(lineItemId: string, isProjectCost: boolean, projectCostAmount: string | null): Promise<MobitelBillLineItemOut[]> {
+  return request<MobitelBillLineItemOut[]>(`/mobitel/bills/line-items/${lineItemId}/project-cost`, {
     method: "PUT",
-    body: JSON.stringify({ is_fixed_cost: isFixedCost, fixed_cost_amount: fixedCostAmount }),
+    body: JSON.stringify({ is_project_cost: isProjectCost, project_cost_amount: projectCostAmount }),
   });
 }
 

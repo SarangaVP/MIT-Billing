@@ -82,8 +82,8 @@ export interface MobitelBillLineItemOut {
   mobile_no: string | null;
   data_cost: string;
   static_ip_cost: string;
-  is_fixed_cost: boolean;
-  fixed_cost_amount: string | null;
+  is_project_cost: boolean;
+  project_cost_amount: string | null;
   total: string;
   imsi_number: string | null;
   data_volume_mb: string | null;

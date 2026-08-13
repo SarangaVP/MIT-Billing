@@ -1,9 +1,9 @@
 import { useEffect, useState, useCallback } from "react";
 import type { MobitelBillPeriod, MobitelBillLineItemOut } from "../types/mobitel";
-import { listMobitelBillPeriods, getMobitelBillSummary, setMobitelStaticIpCost, setMobitelFixedCost, deleteMobitelBillPeriod } from "../api/mobitel";
+import { listMobitelBillPeriods, getMobitelBillSummary, setMobitelStaticIpCost, setMobitelProjectCost, deleteMobitelBillPeriod } from "../api/mobitel";
 import MobitelBillUploadPanel from "../components/MobitelBillUploadPanel";
 import MobitelManageStaticIpPanel from "../components/MobitelManageStaticIpPanel";
-import MobitelManageFixedCostPanel from "../components/MobitelManageFixedCostPanel";
+import MobitelManageProjectCostPanel from "../components/MobitelManageProjectCostPanel";
 import MobitelConfirmPanel from "../components/MobitelConfirmPanel";
 import { exportTeamCostToExcel } from "../../utils/exportTeamCost";
 
@@ -16,7 +16,7 @@ export default function MobitelBillsPage() {
   const [showUpload, setShowUpload] = useState(false);
   const [search, setSearch] = useState("");
   const [showStaticIpPanel, setShowStaticIpPanel] = useState(false);
-  const [showFixedCostPanel, setShowFixedCostPanel] = useState(false);
+  const [showProjectCostPanel, setShowProjectCostPanel] = useState(false);
   const [deletingPeriod, setDeletingPeriod] = useState<MobitelBillPeriod | null>(null);
   const [showBreakdown, setShowBreakdown] = useState(false);
 
@@ -58,8 +58,8 @@ export default function MobitelBillsPage() {
     }
   }
 
-  async function handleSetFixedCost(lineItemId: string, isFixedCost: boolean, amount: string | null) {
-    const rows = await setMobitelFixedCost(lineItemId, isFixedCost, amount);
+  async function handleSetProjectCost(lineItemId: string, isProjectCost: boolean, amount: string | null) {
+    const rows = await setMobitelProjectCost(lineItemId, isProjectCost, amount);
     setSummaryRows(rows);
     const refreshedPeriods = await listMobitelBillPeriods();
     setPeriods(refreshedPeriods);
@@ -134,8 +134,8 @@ export default function MobitelBillsPage() {
             <button className="btn btn-ghost" onClick={() => setShowStaticIpPanel(true)}>
               Manage static IP
             </button>
-            <button className="btn btn-ghost" onClick={() => setShowFixedCostPanel(true)}>
-              Manage fixed cost
+            <button className="btn btn-ghost" onClick={() => setShowProjectCostPanel(true)}>
+              Manage project cost
             </button>
             <button className="btn btn-ghost" onClick={() => setShowBreakdown((v) => !v)}>
               {showBreakdown ? "Hide" : "Show"} team cost & reconciliation
@@ -293,7 +293,7 @@ export default function MobitelBillsPage() {
                     )}
                     <td className="mono">
                       {money(row.data_cost)}
-                      {row.is_fixed_cost && <span className="pill pill-transferred" style={{ marginLeft: 6 }}>Fixed</span>}
+                      {row.is_project_cost && <span className="pill pill-transferred" style={{ marginLeft: 6 }}>Project</span>}
                     </td>
                     <td className="mono">{Number(row.static_ip_cost) > 0 ? money(row.static_ip_cost) : "—"}</td>
                     <td className="mono">{money(row.total)}</td>
@@ -311,11 +311,11 @@ export default function MobitelBillsPage() {
           />
         )}
 
-        {showFixedCostPanel && (
-          <MobitelManageFixedCostPanel
+        {showProjectCostPanel && (
+          <MobitelManageProjectCostPanel
             rows={summaryRows}
-            onSave={handleSetFixedCost}
-            onCancel={() => setShowFixedCostPanel(false)}
+            onSave={handleSetProjectCost}
+            onCancel={() => setShowProjectCostPanel(false)}
           />
         )}
       </div>

@@ -4,12 +4,12 @@ import MobitelConfirmPanel from "./MobitelConfirmPanel";
 
 interface Props {
   rows: MobitelBillLineItemOut[];
-  onSave: (lineItemId: string, isFixedCost: boolean, amount: string | null) => Promise<void>;
+  onSave: (lineItemId: string, isProjectCost: boolean, amount: string | null) => Promise<void>;
   onCancel: () => void;
 }
 
-export default function MobitelManageFixedCostPanel({ rows, onSave, onCancel }: Props) {
-  const currentHolders = rows.filter((r) => r.is_fixed_cost);
+export default function MobitelManageProjectCostPanel({ rows, onSave, onCancel }: Props) {
+  const currentHolders = rows.filter((r) => r.is_project_cost);
 
   const [selectedId, setSelectedId] = useState("");
   const [amount, setAmount] = useState("");
@@ -42,7 +42,7 @@ export default function MobitelManageFixedCostPanel({ rows, onSave, onCancel }: 
   return (
     <div className="panel-overlay" onClick={onCancel}>
       <form className="panel" onClick={(e) => e.stopPropagation()} onSubmit={handleSubmit}>
-        <h2>Manage fixed costs</h2>
+        <h2>Manage project costs</h2>
         <p className="field-hint">
           Use this when someone's real charge for the month is a specific known amount rather than an equal
           share — that person is excluded from both the shared total and the headcount, so everyone else's
@@ -55,7 +55,7 @@ export default function MobitelManageFixedCostPanel({ rows, onSave, onCancel }: 
             {currentHolders.map((row) => (
               <div key={row.id} className="inline-row">
                 <span>{row.name}</span>
-                <span className="mono">Rs. {Number(row.fixed_cost_amount ?? 0).toLocaleString()}</span>
+                <span className="mono">Rs. {Number(row.project_cost_amount ?? 0).toLocaleString()}</span>
                 <button type="button" className="link-btn" onClick={() => setSelectedId(row.id)}>
                   Edit
                 </button>
@@ -68,7 +68,7 @@ export default function MobitelManageFixedCostPanel({ rows, onSave, onCancel }: 
         )}
 
         {currentHolders.length === 0 && (
-          <p className="field-hint">No one currently has a fixed cost set for this bill.</p>
+          <p className="field-hint">No one currently has a project cost set for this bill.</p>
         )}
 
         <label>
@@ -79,14 +79,14 @@ export default function MobitelManageFixedCostPanel({ rows, onSave, onCancel }: 
             </option>
             {rows.map((row) => (
               <option key={row.id} value={row.id}>
-                {row.name} ({row.emp_no}){row.is_fixed_cost ? " — currently set" : ""}
+                {row.name} ({row.emp_no}){row.is_project_cost ? " — currently set" : ""}
               </option>
             ))}
           </select>
         </label>
 
         <label>
-          Fixed cost (Rs.)
+          Project cost (Rs.)
           <input type="number" step="0.01" min="0" required value={amount} onChange={(e) => setAmount(e.target.value)} />
         </label>
 
@@ -104,8 +104,8 @@ export default function MobitelManageFixedCostPanel({ rows, onSave, onCancel }: 
 
       {removingRow && (
         <MobitelConfirmPanel
-          title="Remove fixed cost?"
-          message={`This removes ${removingRow.name}'s fixed cost — they'll go back to the equal split, and everyone else's cost recalculates too.`}
+          title="Remove project cost?"
+          message={`This removes ${removingRow.name}'s project cost — they'll go back to the equal split, and everyone else's cost recalculates too.`}
           onConfirm={handleConfirmRemove}
           onCancel={() => setRemovingRow(null)}
         />
