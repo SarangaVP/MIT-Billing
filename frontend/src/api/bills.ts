@@ -1,4 +1,4 @@
-import type { BillPeriod, ImportResult, BillSummaryRow, ApprovalOverrideInput } from "../types/bill";
+import type { BillPeriod, ImportResult, BillSummaryRow, ApprovalOverrideInput, BucketExclusionInput } from "../types/bill";
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
 
@@ -40,6 +40,14 @@ export async function importBillPdf(label: string, file: File): Promise<ImportRe
 
 export function setApprovalOverride(lineItemId: string, payload: ApprovalOverrideInput): Promise<BillSummaryRow> {
   return request<BillSummaryRow>(`/bills/line-items/${lineItemId}/approval-override`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+export function setBucketExclusion(lineItemId: string, payload: BucketExclusionInput): Promise<BillSummaryRow> {
+  return request<BillSummaryRow>(`/bills/line-items/${lineItemId}/bucket-exclusion`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),

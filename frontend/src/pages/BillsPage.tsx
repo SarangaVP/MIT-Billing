@@ -1,7 +1,8 @@
 import { useEffect, useState, useCallback } from "react";
 import type { BillPeriod, BillSummaryRow } from "../types/bill";
-import { listBillPeriods, getBillSummary, setApprovalOverride, deleteBillPeriod } from "../api/bills";
+import { listBillPeriods, getBillSummary, setApprovalOverride, setBucketExclusion, deleteBillPeriod } from "../api/bills";
 import BillUploadPanel from "../components/BillUploadPanel";
+import BucketExclusionPanel from "../components/BucketExclusionPanel";
 import ConfirmPanel from "../components/ConfirmPanel";
 import { exportTableToExcel } from "../utils/exportTable";
 
@@ -14,6 +15,7 @@ export default function BillsPage() {
   const [showUpload, setShowUpload] = useState(false);
   const [search, setSearch] = useState("");
   const [deletingPeriod, setDeletingPeriod] = useState<BillPeriod | null>(null);
+  const [showBucketExclusionPanel, setShowBucketExclusionPanel] = useState(false);
 
   const loadPeriods = useCallback(async () => {
     setLoadingPeriods(true);
@@ -40,6 +42,11 @@ export default function BillsPage() {
 
   async function handleApprovalChange(row: BillSummaryRow, value: string) {
     const updated = await setApprovalOverride(row.bill_line_item_id, { approval_override: value });
+    setSummaryRows((rows) => rows.map((r) => (r.bill_line_item_id === updated.bill_line_item_id ? updated : r)));
+  }
+
+  async function handleSetBucketExclusion(lineItemId: string, isBucketExcluded: boolean) {
+    const updated = await setBucketExclusion(lineItemId, { is_bucket_excluded: isBucketExcluded });
     setSummaryRows((rows) => rows.map((r) => (r.bill_line_item_id === updated.bill_line_item_id ? updated : r)));
   }
 
@@ -149,9 +156,14 @@ export default function BillsPage() {
               )}
             </p>
           </div>
-          <button className="btn btn-ghost" onClick={handleExport}>
-            Export to Excel
-          </button>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button className="btn btn-ghost" onClick={() => setShowBucketExclusionPanel(true)}>
+              Manage bucket exclusion
+            </button>
+            <button className="btn btn-ghost" onClick={handleExport}>
+              Export to Excel
+            </button>
+          </div>
         </div>
 
         <div className="toolbar">
@@ -235,7 +247,10 @@ export default function BillsPage() {
                     <td className="mono">{money(row.charges_for_bill_period)}</td>
                     <td className="mono">{money(row.vat)}</td>
                     <td className="mono">{money(row.net_amount)}</td>
-                    <td className="mono">{money(row.bucket_cost)}</td>
+                    <td className="mono">
+                      {money(row.bucket_cost)}
+                      {row.is_bucket_excluded && <span className="pill pill-transferred" style={{ marginLeft: 6 }}>Excluded</span>}
+                    </td>
                     <td className="mono">{money(row.total)}</td>
                     <td className="mono">{Number(row.vas) > 0 ? money(row.vas) : "—"}</td>
                     <td className="mono">{Number(row.add_to_bill_charges) > 0 ? money(row.add_to_bill_charges) : "—"}</td>
@@ -288,6 +303,14 @@ export default function BillsPage() {
             </tbody>
           </table>
         </div>
+
+        {showBucketExclusionPanel && (
+          <BucketExclusionPanel
+            rows={summaryRows}
+            onSave={handleSetBucketExclusion}
+            onCancel={() => setShowBucketExclusionPanel(false)}
+          />
+        )}
       </div>
     );
   }

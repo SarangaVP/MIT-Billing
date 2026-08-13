@@ -1,6 +1,6 @@
 import uuid
 
-from sqlalchemy import Column, String, Numeric, DateTime, ForeignKey, func
+from sqlalchemy import Column, String, Numeric, Boolean, DateTime, ForeignKey, func
 
 from app.database import Base
 from app.types import GUID
@@ -58,5 +58,13 @@ class BillLineItem(Base):
     # "Manager approved" — persisted here since it's a genuine decision,
     # not something recomputable.
     approval_override = Column(String, nullable=True)
+
+    # Manual, per-bill-period decision to exclude this connection from the
+    # bucket allocation THIS month — used for "General" lines (see
+    # Employee.is_general_line), which used to be excluded automatically
+    # every month just for being a General line. That's now a deliberate
+    # per-month choice instead: defaults to False on every newly imported
+    # bill, same reset-every-month pattern as Mobitel's project cost.
+    is_bucket_excluded = Column(Boolean, nullable=False, default=False)
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())

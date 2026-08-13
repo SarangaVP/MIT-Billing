@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, UploadFile, File, Form, HTTPException
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.schemas.bill import ImportResult, BillSummaryRow, ApprovalOverrideInput, BillPeriodOut
+from app.schemas.bill import ImportResult, BillSummaryRow, ApprovalOverrideInput, BucketExclusionInput, BillPeriodOut
 from app.services import bill_service
 
 router = APIRouter(prefix="/bills", tags=["bills"])
@@ -62,3 +62,8 @@ def delete_bill_period(bill_period_id: uuid.UUID, db: Session = Depends(get_db))
 @router.put("/line-items/{line_item_id}/approval-override", response_model=BillSummaryRow)
 def set_approval_override(line_item_id: uuid.UUID, payload: ApprovalOverrideInput, db: Session = Depends(get_db)):
     return bill_service.set_approval_override(db, line_item_id, payload)
+
+
+@router.put("/line-items/{line_item_id}/bucket-exclusion", response_model=BillSummaryRow)
+def set_bucket_exclusion(line_item_id: uuid.UUID, payload: BucketExclusionInput, db: Session = Depends(get_db)):
+    return bill_service.set_bucket_exclusion(db, line_item_id, payload.is_bucket_excluded)

@@ -68,8 +68,14 @@ export interface BillSummaryRow {
   salary_deduction: string;
   need_approval: string;
   is_overridden: boolean;
+  is_general_line: boolean;
+  is_bucket_excluded: boolean;
 }
 
 export interface ApprovalOverrideInput {
   approval_override: string | null;
+}
+
+export interface BucketExclusionInput {
+  is_bucket_excluded: boolean;
 }

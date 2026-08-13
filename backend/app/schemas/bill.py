@@ -36,6 +36,10 @@ class ApprovalOverrideInput(BaseModel):
     approval_override: str | None  # e.g. "Manager approved", or null to clear it
 
 
+class BucketExclusionInput(BaseModel):
+    is_bucket_excluded: bool
+
+
 class BillSummaryRow(BaseModel):
     """
     Mirrors the source Excel 'Summary' tab, as closely as the source file
@@ -79,3 +83,5 @@ class BillSummaryRow(BaseModel):
     salary_deduction: Decimal
     need_approval: str
     is_overridden: bool
+    is_general_line: bool
+    is_bucket_excluded: bool

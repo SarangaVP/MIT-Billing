@@ -1,3 +1,9 @@
+# ============================================================
+# NOTE: Lines 1–266 of the real file are a commented-out OLD
+# version of this module (pre-existing, unrelated to this
+# change, left as-is). Showing only the ACTIVE code below.
+# ============================================================
+
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
@@ -215,14 +221,17 @@ def _build_summary_rows(db: Session, line_items: list[BillLineItem], as_of: date
         # month — 100% clean across 82 real Intern rows, zero exceptions
         # either direction. Unlike disconnection, this genuinely can't be
         # inferred from usage — it's tied to cadre, which we already
-        # store on the employee. Also confirmed the handful of remaining
-        # exceptions in that same file are exactly our already-modeled
-        # "General" lines (is_general_line) — those aren't real personal
-        # employees, so excluding them here too is consistent.
+        # store on the employee.
         is_intern = bool(employee and employee.cadre and employee.cadre.strip().lower() == "intern")
         is_general_line = bool(employee and employee.is_general_line)
 
-        if is_disconnected_this_month or is_intern or is_general_line:
+        # General lines are NO LONGER auto-excluded from the bucket just
+        # for being a General line — that's now a deliberate per-month
+        # decision (li.is_bucket_excluded, set via "Manage bucket
+        # exclusion" in the UI), since not every General line should
+        # necessarily be excluded every single month. Disconnection and
+        # Intern status remain fully automatic.
+        if is_disconnected_this_month or is_intern or li.is_bucket_excluded:
             bucket_cost = Decimal("0")
             bucket_vat = Decimal("0")
         else:
@@ -277,6 +286,8 @@ def _build_summary_rows(db: Session, line_items: list[BillLineItem], as_of: date
             salary_deduction=salary_deduction,
             need_approval=need_approval,
             is_overridden=is_overridden,
+            is_general_line=is_general_line,
+            is_bucket_excluded=li.is_bucket_excluded,
         ))
 
     return results
@@ -288,6 +299,26 @@ def set_approval_override(db: Session, line_item_id: uuid.UUID, payload: Approva
         raise HTTPException(status_code=404, detail="Bill line item not found")
 
     line_item.approval_override = payload.approval_override
+    db.commit()
+    db.refresh(line_item)
+    return get_summary_row_for_line_item(db, line_item_id)
+
+
+def set_bucket_exclusion(db: Session, line_item_id: uuid.UUID, is_bucket_excluded: bool) -> BillSummaryRow:
+    """
+    Marks/unmarks one connection as excluded from the bucket allocation
+    for THIS bill period specifically — a deliberate per-month decision,
+    typically used for "General" lines (see Employee.is_general_line).
+    Unlike Mobitel's project cost, this doesn't touch anyone else's
+    numbers: the bucket rate here isn't a shared pool split across
+    everyone, it's a flat per-connection allocation, so zeroing one
+    row's bucket_cost/bucket_vat has zero effect on any other row.
+    """
+    line_item = db.query(BillLineItem).filter(BillLineItem.id == line_item_id).first()
+    if not line_item:
+        raise HTTPException(status_code=404, detail="Bill line item not found")
+
+    line_item.is_bucket_excluded = is_bucket_excluded
     db.commit()
     db.refresh(line_item)
     return get_summary_row_for_line_item(db, line_item_id)
