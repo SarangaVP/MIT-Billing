@@ -4,6 +4,7 @@ import { listDialogDataBillPeriods, getDialogDataBillSummary, deleteDialogDataBi
 import DialogDataBillUploadPanel from "../components/DialogDataBillUploadPanel";
 import DialogDataConfirmPanel from "../components/DialogDataConfirmPanel";
 import { exportTeamCostToExcel } from "../../utils/exportTeamCost";
+import { exportTableToExcel } from "../../utils/exportTable";
 
 export default function DialogDataBillsPage() {
   const [periods, setPeriods] = useState<DialogDataBillPeriod[]>([]);
@@ -73,6 +74,33 @@ export default function DialogDataBillsPage() {
   const teamCostTotal = teamCostRows.reduce((sum, r) => sum + r.cost, 0);
   const sumOfLineItems = summaryRows.reduce((sum, r) => sum + Number(r.cost), 0);
 
+  function handleExport() {
+    if (!selectedPeriod) return;
+    const headers = [
+      "EMP No", "Name", "Team", "LOB Code", "Connection No",
+      ...(hasUsageData ? ["Allocation GB", "Usage GB", "Remaining GB", "Pay Go Status"] : []),
+      "Cost",
+    ];
+    const rows = filteredRows.map((row) => [
+      row.emp_no ?? "", row.name ?? "", row.team ?? "", row.lob_code ?? "", row.connection_no ?? "",
+      ...(hasUsageData
+        ? [row.allocation_gb ?? "", row.usage_gb ?? "", row.remaining_gb ?? "", row.pay_go_status ?? ""]
+        : []),
+      Number(row.cost),
+    ]);
+    const totalsRow = [
+      "Total", "", "", "", "",
+      ...(hasUsageData ? ["", "", "", ""] : []),
+      Number(filteredRows.reduce((s, r) => s + Number(r.cost), 0).toFixed(2)),
+    ];
+    exportTableToExcel(
+      headers,
+      [...rows, totalsRow],
+      `DialogData_${selectedPeriod.label.replace(/\s+/g, "_")}_summary.xlsx`,
+      "Summary"
+    );
+  }
+
   if (selectedPeriod) {
     return (
       <div className="page">
@@ -90,9 +118,14 @@ export default function DialogDataBillsPage() {
               )}
             </p>
           </div>
-          <button className="btn btn-ghost" onClick={() => setShowBreakdown((v) => !v)}>
-            {showBreakdown ? "Hide" : "Show"} team cost & reconciliation
-          </button>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button className="btn btn-ghost" onClick={() => setShowBreakdown((v) => !v)}>
+              {showBreakdown ? "Hide" : "Show"} team cost & reconciliation
+            </button>
+            <button className="btn btn-ghost" onClick={handleExport}>
+              Export to Excel
+            </button>
+          </div>
         </div>
 
         {showBreakdown && (
