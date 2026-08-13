@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, UploadFile, File, Form
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.schemas.dialog_data_bill import DialogDataBillPeriodOut, DialogDataImportResult
+from app.schemas.dialog_data_bill import DialogDataBillPeriodOut, DialogDataImportResult, DialogDataProjectCostUpdateInput
 from app.services import dialog_data_bill_service
 
 router = APIRouter(prefix="/dialog-data/bills", tags=["dialog-data-bills"])
@@ -51,3 +51,13 @@ def get_bill_summary(bill_period_id: uuid.UUID, db: Session = Depends(get_db)):
 @router.delete("/{bill_period_id}", status_code=204)
 def delete_bill_period(bill_period_id: uuid.UUID, db: Session = Depends(get_db)):
     dialog_data_bill_service.delete_bill_period(db, bill_period_id)
+
+
+@router.put("/line-items/{line_item_id}/project-cost")
+def update_project_cost(line_item_id: uuid.UUID, payload: DialogDataProjectCostUpdateInput, db: Session = Depends(get_db)):
+    """
+    Marks/unmarks this connection as having a manually-set project cost for
+    this bill period, excluding it from the equal split, and recalculates
+    the whole period. Same behavior as Mobitel's project cost.
+    """
+    return dialog_data_bill_service.update_project_cost(db, line_item_id, payload.is_project_cost, payload.project_cost_amount)

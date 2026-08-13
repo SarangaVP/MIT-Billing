@@ -1,7 +1,8 @@
 import { useEffect, useState, useCallback } from "react";
 import type { DialogDataBillPeriod, DialogDataBillLineItemOut } from "../types/dialogData";
-import { listDialogDataBillPeriods, getDialogDataBillSummary, deleteDialogDataBillPeriod } from "../api/dialogData";
+import { listDialogDataBillPeriods, getDialogDataBillSummary, setDialogDataProjectCost, deleteDialogDataBillPeriod } from "../api/dialogData";
 import DialogDataBillUploadPanel from "../components/DialogDataBillUploadPanel";
+import DialogDataManageProjectCostPanel from "../components/DialogDataManageProjectCostPanel";
 import DialogDataConfirmPanel from "../components/DialogDataConfirmPanel";
 import { exportTeamCostToExcel } from "../../utils/exportTeamCost";
 import { exportTableToExcel } from "../../utils/exportTable";
@@ -16,6 +17,7 @@ export default function DialogDataBillsPage() {
   const [search, setSearch] = useState("");
   const [deletingPeriod, setDeletingPeriod] = useState<DialogDataBillPeriod | null>(null);
   const [showBreakdown, setShowBreakdown] = useState(false);
+  const [showProjectCostPanel, setShowProjectCostPanel] = useState(false);
 
   const loadPeriods = useCallback(async () => {
     setLoadingPeriods(true);
@@ -45,6 +47,19 @@ export default function DialogDataBillsPage() {
     await deleteDialogDataBillPeriod(deletingPeriod.id);
     setDeletingPeriod(null);
     loadPeriods();
+  }
+
+  async function handleSetProjectCost(lineItemId: string, isProjectCost: boolean, amount: string | null) {
+    const rows = await setDialogDataProjectCost(lineItemId, isProjectCost, amount);
+    setSummaryRows(rows);
+    // Keep BOTH the detail view (selectedPeriod) and the main list (periods)
+    // in sync with the recalculation — same fix as Mobitel's equivalent.
+    const refreshedPeriods = await listDialogDataBillPeriods();
+    setPeriods(refreshedPeriods);
+    if (selectedPeriod) {
+      const refreshed = refreshedPeriods.find((p) => p.id === selectedPeriod.id);
+      if (refreshed) setSelectedPeriod(refreshed);
+    }
   }
 
   const filteredRows = summaryRows.filter((row) => {
@@ -79,19 +94,19 @@ export default function DialogDataBillsPage() {
     const headers = [
       "EMP No", "Name", "Team", "LOB Code", "Connection No",
       ...(hasUsageData ? ["Allocation GB", "Usage GB", "Remaining GB", "Pay Go Status"] : []),
-      "Cost",
+      "Cost", "Project Cost",
     ];
     const rows = filteredRows.map((row) => [
       row.emp_no ?? "", row.name ?? "", row.team ?? "", row.lob_code ?? "", row.connection_no ?? "",
       ...(hasUsageData
         ? [row.allocation_gb ?? "", row.usage_gb ?? "", row.remaining_gb ?? "", row.pay_go_status ?? ""]
         : []),
-      Number(row.cost),
+      Number(row.cost), row.is_project_cost ? "Yes" : "No",
     ]);
     const totalsRow = [
       "Total", "", "", "", "",
       ...(hasUsageData ? ["", "", "", ""] : []),
-      Number(filteredRows.reduce((s, r) => s + Number(r.cost), 0).toFixed(2)),
+      Number(filteredRows.reduce((s, r) => s + Number(r.cost), 0).toFixed(2)), "",
     ];
     exportTableToExcel(
       headers,
@@ -119,6 +134,9 @@ export default function DialogDataBillsPage() {
             </p>
           </div>
           <div style={{ display: "flex", gap: 8 }}>
+            <button className="btn btn-ghost" onClick={() => setShowProjectCostPanel(true)}>
+              Manage project cost
+            </button>
             <button className="btn btn-ghost" onClick={() => setShowBreakdown((v) => !v)}>
               {showBreakdown ? "Hide" : "Show"} team cost & reconciliation
             </button>
@@ -273,12 +291,23 @@ export default function DialogDataBillsPage() {
                         <td>{row.pay_go_status || <span className="muted">—</span>}</td>
                       </>
                     )}
-                    <td className="mono">{money(row.cost)}</td>
+                    <td className="mono">
+                      {money(row.cost)}
+                      {row.is_project_cost && <span className="pill pill-transferred" style={{ marginLeft: 6 }}>Project</span>}
+                    </td>
                   </tr>
                 ))}
             </tbody>
           </table>
         </div>
+
+        {showProjectCostPanel && (
+          <DialogDataManageProjectCostPanel
+            rows={summaryRows}
+            onSave={handleSetProjectCost}
+            onCancel={() => setShowProjectCostPanel(false)}
+          />
+        )}
       </div>
     );
   }

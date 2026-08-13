@@ -1,6 +1,6 @@
 import uuid
 
-from sqlalchemy import Column, String, Numeric, DateTime, ForeignKey, func
+from sqlalchemy import Column, String, Numeric, Boolean, DateTime, ForeignKey, func
 
 from app.database import Base
 from app.types import GUID
@@ -21,6 +21,15 @@ class DialogDataBillLineItem(Base):
     connection_id = Column(GUID, ForeignKey("dialog_data_connections.id"), nullable=False, index=True)
 
     cost = Column(Numeric(12, 2), nullable=False)
+
+    # A manually-set project cost, used when someone's real charge for the
+    # month is a specific known amount rather than an equal share of the
+    # bucket — same concept and behavior as Mobitel's project cost. When
+    # True, cost = project_cost_amount for this row, and this row is
+    # excluded from BOTH the shared pool (Net) and the headcount (Users)
+    # for everyone else's equal split.
+    is_project_cost = Column(Boolean, nullable=False, default=False)
+    project_cost_amount = Column(Numeric(12, 2), nullable=True)
 
     # Only populated when the "Bill" sheet was uploaded alongside the PDF —
     # stored as raw strings, since real data includes non-numeric values

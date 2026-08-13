@@ -85,6 +85,13 @@ export function getDialogDataBillSummary(billPeriodId: string): Promise<DialogDa
   return request<DialogDataBillLineItemOut[]>(`/dialog-data/bills/${billPeriodId}/summary`);
 }
 
+export function setDialogDataProjectCost(lineItemId: string, isProjectCost: boolean, projectCostAmount: string | null): Promise<DialogDataBillLineItemOut[]> {
+  return request<DialogDataBillLineItemOut[]>(`/dialog-data/bills/line-items/${lineItemId}/project-cost`, {
+    method: "PUT",
+    body: JSON.stringify({ is_project_cost: isProjectCost, project_cost_amount: projectCostAmount }),
+  });
+}
+
 export async function deleteDialogDataBillPeriod(billPeriodId: string): Promise<void> {
   const res = await fetch(`${BASE_URL}/dialog-data/bills/${billPeriodId}`, { method: "DELETE" });
   if (!res.ok) {
