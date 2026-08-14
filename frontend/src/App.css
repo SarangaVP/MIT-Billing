@@ -403,7 +403,12 @@ tbody tr:hover {
   background: var(--warning-bg);
 }
 
-/* Colors the individual rows of the open dropdown list too, so all three
+.approval-select.approval-salary-deducted {
+  color: var(--accent);
+  background: var(--accent-bg);
+}
+
+/* Colors the individual rows of the open dropdown list too, so all four
    options are visually distinct, not just whichever one is currently selected. */
 .approval-option-ok {
   color: var(--success);
@@ -417,6 +422,11 @@ tbody tr:hover {
 
 .approval-option-manager {
   color: var(--warning);
+  background: var(--surface);
+}
+
+.approval-option-salary-deducted {
+  color: var(--accent);
   background: var(--surface);
 }
 

@@ -75,6 +75,7 @@ export default function BillsPage() {
   function approvalClass(value: string): string {
     if (value === "OK") return "approval-ok";
     if (value === "Need Approval") return "approval-attention";
+    if (value === "Deducted from Salary") return "approval-salary-deducted";
     return "approval-manager"; // "Manager approved", or any other override text
   }
 
@@ -289,8 +290,9 @@ export default function BillsPage() {
                         <option value="OK" className="approval-option-ok">OK</option>
                         <option value="Need Approval" className="approval-option-attention">Need Approval</option>
                         <option value="Manager approved" className="approval-option-manager">Manager approved</option>
+                        <option value="Deducted from Salary" className="approval-option-salary-deducted">Deducted from Salary</option>
                         {/* Preserve any other legacy free-text override so the select never shows blank */}
-                        {!["OK", "Need Approval", "Manager approved"].includes(row.need_approval) && (
+                        {!["OK", "Need Approval", "Manager approved", "Deducted from Salary"].includes(row.need_approval) && (
                           <option value={row.need_approval}>{row.need_approval}</option>
                         )}
                       </select>
