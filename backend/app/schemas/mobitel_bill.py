@@ -46,6 +46,11 @@ class MobitelStaticIpCostUpdateInput(BaseModel):
     cost: Decimal
 
 
+class MobitelProjectCostUpdateInput(BaseModel):
+    is_project_cost: bool
+    project_cost_amount: Decimal | None = None
+
+
 class MobitelBillLineItemOut(BaseModel):
     id: uuid.UUID
     connection_id: uuid.UUID
@@ -56,6 +61,8 @@ class MobitelBillLineItemOut(BaseModel):
     mobile_no: str | None
     data_cost: Decimal
     static_ip_cost: Decimal
+    is_project_cost: bool = False
+    project_cost_amount: Decimal | None = None
     total: Decimal
 
     # Only populated when a Portal sheet was uploaded alongside the PDF

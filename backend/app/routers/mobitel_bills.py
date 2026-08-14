@@ -7,7 +7,7 @@ from pathlib import Path
 from tempfile import NamedTemporaryFile
 
 from app.database import get_db
-from app.schemas.mobitel_bill import MobitelBillPeriodOut, MobitelImportResult, MobitelStaticIpCostUpdateInput
+from app.schemas.mobitel_bill import MobitelBillPeriodOut, MobitelImportResult, MobitelStaticIpCostUpdateInput, MobitelProjectCostUpdateInput
 from app.services import mobitel_bill_service
 
 router = APIRouter(prefix="/mobitel/bills", tags=["mobitel-bills"])
@@ -57,3 +57,13 @@ def delete_bill_period(bill_period_id: uuid.UUID, db: Session = Depends(get_db))
 def update_static_ip_cost(line_item_id: uuid.UUID, payload: MobitelStaticIpCostUpdateInput, db: Session = Depends(get_db)):
     """Sets this line item's static IP cost and recalculates the whole bill period's split."""
     return mobitel_bill_service.update_static_ip_cost(db, line_item_id, payload.cost)
+
+
+@router.put("/line-items/{line_item_id}/project-cost")
+def update_project_cost(line_item_id: uuid.UUID, payload: MobitelProjectCostUpdateInput, db: Session = Depends(get_db)):
+    """
+    Marks/unmarks this connection as having a manually-set project cost for
+    this bill period, excluding it from the equal split, and recalculates
+    the whole period.
+    """
+    return mobitel_bill_service.update_project_cost(db, line_item_id, payload.is_project_cost, payload.project_cost_amount)

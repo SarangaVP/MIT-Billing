@@ -80,6 +80,8 @@ export interface DialogDataBillLineItemOut {
   lob_code: string | null;
   connection_no: string | null;
   cost: string;
+  is_project_cost: boolean;
+  project_cost_amount: string | null;
   allocation_gb: string | null;
   usage_gb: string | null;
   remaining_gb: string | null;

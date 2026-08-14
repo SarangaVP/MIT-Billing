@@ -190,6 +190,8 @@ def get_summary(db: Session, bill_period_id: uuid.UUID) -> list[dict]:
             "lob_code": emp.lob_code,
             "connection_no": conn.connection_no,
             "cost": li.cost,
+            "is_project_cost": li.is_project_cost,
+            "project_cost_amount": li.project_cost_amount,
             "allocation_gb": li.allocation_gb,
             "usage_gb": li.usage_gb,
             "remaining_gb": li.remaining_gb,
@@ -198,3 +200,68 @@ def get_summary(db: Session, bill_period_id: uuid.UUID) -> list[dict]:
         }
         for li, conn, emp in rows
     ]
+
+
+def _recalculate_period(db: Session, bill_period: DialogDataBillPeriod) -> None:
+    """
+    Same behavior as Mobitel's recalculation: project-cost items
+    (is_project_cost=True) are excluded from BOTH the shared pool and the
+    headcount — their amounts are subtracted from Net, and they're
+    removed from Users, before the remaining connections split what's
+    left evenly.
+    """
+    all_items = (
+        db.query(DialogDataBillLineItem)
+        .filter(DialogDataBillLineItem.bill_period_id == bill_period.id)
+        .all()
+    )
+    project_items = [item for item in all_items if item.is_project_cost]
+    normal_items = [item for item in all_items if not item.is_project_cost]
+
+    users = len(normal_items)
+    if users == 0:
+        raise HTTPException(status_code=422, detail="Every connection on this bill is marked project-cost — nothing left to split")
+
+    total_project_cost = sum((item.project_cost_amount or Decimal("0")) for item in project_items)
+    net = bill_period.net or Decimal("0")
+
+    per_user_cost = ((net - total_project_cost) / users).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+
+    line_total = Decimal("0")
+    for item in normal_items:
+        item.cost = per_user_cost.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        line_total += item.cost
+
+    for item in project_items:
+        item.cost = (item.project_cost_amount or Decimal("0")).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        line_total += item.cost
+
+    discrepancy = line_total - net
+    bill_period.per_user_cost = per_user_cost
+    bill_period.reconciled = abs(discrepancy) < Decimal("0.01")
+    bill_period.reconciliation_discrepancy = discrepancy
+
+
+def update_project_cost(db: Session, line_item_id: uuid.UUID, is_project_cost: bool, project_cost_amount: Decimal | None) -> list[dict]:
+    """
+    Marks (or unmarks) one connection as having a manually-set project cost
+    for THIS bill period — same behavior as Mobitel's project cost.
+    Excludes that connection from both the shared pool and the headcount
+    for everyone else's equal split, then recalculates.
+    """
+    if is_project_cost and project_cost_amount is None:
+        raise HTTPException(status_code=422, detail="project_cost_amount is required when is_project_cost is true")
+
+    line_item = db.query(DialogDataBillLineItem).filter(DialogDataBillLineItem.id == line_item_id).first()
+    if not line_item:
+        raise HTTPException(status_code=404, detail="Bill line item not found")
+
+    bill_period = get_bill_period(db, line_item.bill_period_id)
+    line_item.is_project_cost = is_project_cost
+    line_item.project_cost_amount = project_cost_amount if is_project_cost else None
+    db.flush()
+
+    _recalculate_period(db, bill_period)
+    db.commit()
+
+    return get_summary(db, bill_period.id)

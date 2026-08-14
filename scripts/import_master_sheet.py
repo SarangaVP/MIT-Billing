@@ -13,14 +13,14 @@ its 9 real rows is already a duplicate of something in the main table
 source of additional data, so it's deliberately not read at all.
 
 Some EMP Nos in the main table are the literal text "General" — these
-represent pooled/shared lines (e.g. security post phones, a shared data
-bucket) not tied to one named person. Confirmed real case: 5 such rows
-(Security 1/3/4, Driver Perera, Data bucket) all share this literal EMP
-No — without excluding them, they'd get grouped together as one garbled
-"employee" (whichever row's Name/LOB happened to be read first stands in
-for all 5). Each gets its OWN synthetic EMP No (keyed by mobile number,
-since these are distinct unrelated lines, not one person) and is stored
-as a real employee with is_shared_line=True — this used to just report
+represent pooled "General" lines (e.g. security post phones, a shared
+data bucket) not tied to one named person. Confirmed real case: 5 such
+rows (Security 1/3/4, Driver Perera, Data bucket) all share this literal
+EMP No — without excluding them, they'd get grouped together as one
+garbled "employee" (whichever row's Name/LOB happened to be read first
+stands in for all 5). Each gets its OWN synthetic EMP No (keyed by mobile
+number, since these are distinct unrelated lines, not one person) and is
+stored as a real employee with is_general_line=True — this used to just report
 them and discard the data, which meant any bill charge on one of these
 lines showed as an unattributed "Unmatched number" instead of its real
 label.
@@ -91,18 +91,54 @@ def to_text(value):
     return str(value)
 
 
-def load_main_table_rows(xlsx_path: str):
+def load_main_table_rows(xlsx_path: str) -> list[dict]:
     """
-    Returns only the main table's rows — everything from row 2 up to (but
-    not including) the "Additional common connection" marker, if present.
-    Deliberately stops there; see the module docstring for why.
+    Returns a list of dicts (one per real data row), keyed by normalized
+    header name — e.g. row["mobile no"], row["emp no"] — instead of
+    fixed positions. Confirmed real risk this replaces: the previous
+    version read row[0] through row[8] with ZERO verification that
+    column 4 was actually "Cadre", column 7 actually "Email", etc. — if
+    the sheet's column order ever changed, this would have silently
+    corrupted data with no error at all (the same failure mode already
+    confirmed and fixed for the Portal sheet elsewhere in this project).
+
+    Also handles a CONFIRMED real typo in the source file's own header:
+    the Email column is literally spelled "Emaill" (double-L), not
+    "Email" — both spellings are accepted and mapped to the same field,
+    so a future corrected spelling wouldn't silently break this either.
     """
     wb = openpyxl.load_workbook(xlsx_path, data_only=True)
     ws = wb["Master sheet"]
-    rows = [list(row) for row in ws.iter_rows(min_row=1, max_row=ws.max_row, values_only=True)]
+
+    header_row_num = None
+    col_map: dict[str, int] = {}
+    for row in ws.iter_rows(min_row=1, max_row=5):
+        values = [str(c.value).strip().lower() if c.value else None for c in row]
+        if "mobile no" in values and "emp no" in values and "name" in values:
+            header_row_num = row[0].row
+            col_map = {v: i for i, v in enumerate(values) if v}
+            break
+    if header_row_num is None:
+        raise ValueError("Could not find a header row containing 'Mobile No', 'EMP No', and 'Name' in the first 5 rows")
+
+    email_idx = col_map.get("email", col_map.get("emaill"))   # confirmed real header typo: "Emaill"
+
+    field_columns = {
+        "mobile no": col_map.get("mobile no"),
+        "emp no": col_map.get("emp no"),
+        "name": col_map.get("name"),
+        "lob": col_map.get("lob"),
+        "cadre": col_map.get("cadre"),
+        "credit limit": col_map.get("credit limit"),
+        "level": col_map.get("level"),
+        "email": email_idx,
+        "resignation": col_map.get("resignation"),
+    }
+
+    all_rows = list(ws.iter_rows(min_row=header_row_num + 1, max_row=ws.max_row, values_only=True))
 
     marker_idx = None
-    for i, row in enumerate(rows):
+    for i, row in enumerate(all_rows):
         for cell in row:
             if isinstance(cell, str) and cell.strip() == ADDITIONAL_BLOCK_MARKER:
                 marker_idx = i
@@ -110,7 +146,15 @@ def load_main_table_rows(xlsx_path: str):
         if marker_idx is not None:
             break
 
-    return rows[1:marker_idx] if marker_idx is not None else rows[1:]   # skip header row
+    main_rows = all_rows[:marker_idx] if marker_idx is not None else all_rows
+
+    def row_to_dict(row: tuple) -> dict:
+        return {
+            field: (row[idx] if idx is not None and idx < len(row) else None)
+            for field, idx in field_columns.items()
+        }
+
+    return [row_to_dict(row) for row in main_rows]
 
 
 def main(xlsx_path: str):
@@ -130,12 +174,12 @@ def main(xlsx_path: str):
         existing_emp_nos = {e.emp_no for e in db.query(Employee.emp_no).all()}
         existing_mobile_nos = {m.mobile_no for m in db.query(MobileNumber.mobile_no).all()}
 
-        # Column order: Mobile No, EMP No, Name, LOB, Cadre, Credit Limit, Level, Email
+        # Column order is now resolved by header name, not position — see load_main_table_rows.
         grouped = {}
         for row in main_rows:
-            raw_mobile_no = clean(row[0] if len(row) > 0 else None)
-            emp_no = to_text(clean(row[1] if len(row) > 1 else None))
-            raw_name = clean(row[2] if len(row) > 2 else None)
+            raw_mobile_no = clean(row["mobile no"])
+            emp_no = to_text(clean(row["emp no"]))
+            raw_name = clean(row["name"])
             base_name, project_label = split_name_and_project_label(raw_name)
 
             if not emp_no:
@@ -143,7 +187,7 @@ def main(xlsx_path: str):
                 continue
 
             if emp_no in UNRESOLVED_EMP_NO_PLACEHOLDERS:
-                # A shared/pooled line, not a real named employee — the
+                # A "General" line, not a real named employee — the
                 # source sheet uses the literal text "General" for these
                 # instead of a real EMP No. Each gets its own synthetic
                 # EMP No (keyed by mobile number, since these 5 rows are
@@ -163,20 +207,20 @@ def main(xlsx_path: str):
                 if synthetic_emp_no in existing_emp_nos or mobile_no_str in existing_mobile_nos:
                     continue  # already imported on a previous run
 
-                shared_line_employee = Employee(
+                general_line_employee = Employee(
                     emp_no=synthetic_emp_no,
                     name=base_name,
-                    lob=clean(row[3] if len(row) > 3 else None),
-                    cadre=clean(row[4] if len(row) > 4 else None),
-                    credit_limit=clean(row[5] if len(row) > 5 else None),
-                    level=clean(row[6] if len(row) > 6 else None),
-                    email=clean(row[7] if len(row) > 7 else None),
-                    resignation=clean(row[8] if len(row) > 8 else None),
-                    is_shared_line=True,
+                    lob=clean(row["lob"]),
+                    cadre=clean(row["cadre"]),
+                    credit_limit=clean(row["credit limit"]),
+                    level=clean(row["level"]),
+                    email=clean(row["email"]),
+                    resignation=clean(row["resignation"]),
+                    is_general_line=True,
                 )
-                db.add(shared_line_employee)
+                db.add(general_line_employee)
                 db.flush()
-                db.add(MobileNumber(employee_id=shared_line_employee.id, mobile_no=mobile_no_str, is_primary=True))
+                db.add(MobileNumber(employee_id=general_line_employee.id, mobile_no=mobile_no_str, is_primary=True))
                 existing_emp_nos.add(synthetic_emp_no)
                 existing_mobile_nos.add(mobile_no_str)
                 inserted_employees += 1
@@ -212,17 +256,17 @@ def main(xlsx_path: str):
             # identity fields if one exists; otherwise fall back to
             # whichever row came first, stripping its label from the name.
             source_row = data["clean_name_row"] or data["first"]
-            clean_source_name, _ = split_name_and_project_label(clean(source_row[2] if len(source_row) > 2 else None))
+            clean_source_name, _ = split_name_and_project_label(clean(source_row["name"]))
 
             employee = Employee(
                 emp_no=emp_no,
                 name=clean_source_name,
-                lob=clean(source_row[3] if len(source_row) > 3 else None),
-                cadre=clean(source_row[4] if len(source_row) > 4 else None),
-                credit_limit=clean(source_row[5] if len(source_row) > 5 else None),
-                level=clean(source_row[6] if len(source_row) > 6 else None),
-                email=clean(source_row[7] if len(source_row) > 7 else None),
-                resignation=clean(source_row[8] if len(source_row) > 8 else None),
+                lob=clean(source_row["lob"]),
+                cadre=clean(source_row["cadre"]),
+                credit_limit=clean(source_row["credit limit"]),
+                level=clean(source_row["level"]),
+                email=clean(source_row["email"]),
+                resignation=clean(source_row["resignation"]),
             )
             db.add(employee)
             db.flush()
@@ -265,7 +309,7 @@ def main(xlsx_path: str):
             print(f"  - {mobile_no} for EMP No {emp_no} ({reason})")
 
     if unresolved_placeholder_rows:
-        print(f"\n{len(unresolved_placeholder_rows)} shared/pooled line(s) imported as their own employee record (EMP No 'General' in the source sheet):")
+        print(f"\n{len(unresolved_placeholder_rows)} 'General' line(s) imported as their own employee record (EMP No 'General' in the source sheet):")
         for mobile_no, emp_no, label in unresolved_placeholder_rows:
             print(f"  - {mobile_no} -> {label} (synthetic EMP No: GENERAL-{mobile_no})")
 

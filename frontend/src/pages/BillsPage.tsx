@@ -1,7 +1,10 @@
 import { useEffect, useState, useCallback } from "react";
-import type { BillPeriod, BillSummaryRow } from "../types/bill";
-import { listBillPeriods, getBillSummary, setApprovalOverride, deleteBillPeriod } from "../api/bills";
+import type { BillPeriod, BillSummaryRow, LineItemChargeUpdateInput } from "../types/bill";
+import { listBillPeriods, getBillSummary, setApprovalOverride, setBucketExclusion, setBucketRateOverride, setLineItemCharges, deleteBillPeriod } from "../api/bills";
 import BillUploadPanel from "../components/BillUploadPanel";
+import BucketExclusionPanel from "../components/BucketExclusionPanel";
+import BucketRatePanel from "../components/BucketRatePanel";
+import ManageDataBucketPanel from "../components/ManageDataBucketPanel";
 import ConfirmPanel from "../components/ConfirmPanel";
 import { exportTableToExcel } from "../utils/exportTable";
 
@@ -14,6 +17,9 @@ export default function BillsPage() {
   const [showUpload, setShowUpload] = useState(false);
   const [search, setSearch] = useState("");
   const [deletingPeriod, setDeletingPeriod] = useState<BillPeriod | null>(null);
+  const [showBucketExclusionPanel, setShowBucketExclusionPanel] = useState(false);
+  const [showBucketRatePanel, setShowBucketRatePanel] = useState(false);
+  const [showManageDataBucketPanel, setShowManageDataBucketPanel] = useState(false);
 
   const loadPeriods = useCallback(async () => {
     setLoadingPeriods(true);
@@ -43,9 +49,40 @@ export default function BillsPage() {
     setSummaryRows((rows) => rows.map((r) => (r.bill_line_item_id === updated.bill_line_item_id ? updated : r)));
   }
 
+  async function handleSetBucketExclusion(lineItemId: string, isBucketExcluded: boolean) {
+    const updated = await setBucketExclusion(lineItemId, { is_bucket_excluded: isBucketExcluded });
+    setSummaryRows((rows) => rows.map((r) => (r.bill_line_item_id === updated.bill_line_item_id ? updated : r)));
+  }
+
+  async function handleSetLineItemCharges(lineItemId: string, payload: LineItemChargeUpdateInput) {
+    const updated = await setLineItemCharges(lineItemId, payload);
+    setSummaryRows((rows) => rows.map((r) => (r.bill_line_item_id === updated.bill_line_item_id ? updated : r)));
+  }
+
+  function handleOpenBucketRatePanel() {
+    setShowBucketRatePanel(true);
+  }
+
+  async function handleSaveBucketRate(cost: number | null, vat: number | null) {
+    if (!selectedPeriod) return;
+    const rows = await setBucketRateOverride(selectedPeriod.id, {
+      bucket_cost_override: cost,
+      bucket_vat_override: vat,
+    });
+    setSummaryRows(rows);
+    setShowBucketRatePanel(false);
+    // The override lives on the bill period itself, so refresh it too —
+    // otherwise reopening this panel would show stale override values.
+    const refreshedPeriods = await listBillPeriods();
+    setPeriods(refreshedPeriods);
+    const refreshed = refreshedPeriods.find((p) => p.id === selectedPeriod.id);
+    if (refreshed) setSelectedPeriod(refreshed);
+  }
+
   function approvalClass(value: string): string {
     if (value === "OK") return "approval-ok";
     if (value === "Need Approval") return "approval-attention";
+    if (value === "Deducted from Salary") return "approval-salary-deducted";
     return "approval-manager"; // "Manager approved", or any other override text
   }
 
@@ -71,6 +108,7 @@ export default function BillsPage() {
 
   const sum = (key: keyof BillSummaryRow) => filteredRows.reduce((acc, r) => acc + Number(r[key] as string), 0);
   const totals = {
+    total_usage_charges: sum("total_usage_charges"),
     voice_rental: sum("voice_rental"),
     voice_usage: sum("voice_usage"),
     sms: sum("sms"),
@@ -91,13 +129,14 @@ export default function BillsPage() {
   function handleExport() {
     if (!selectedPeriod) return;
     const headers = [
-      "Mobile No", "EMP No", "Name", "Project",
+      "Mobile No", "EMP No", "Name", "Project", "Total Usage Charges",
       ...(hasBreakdown ? ["Voice Rental", "Voice Usage", "SMS", "Data Rental", "Data Usage"] : []),
       "IDD", "Roaming", "Charges for Bill Period", "VAT", "Net Amount", "Bucket Cost", "Total",
       "VAS", "Add To Bill Charges", "Salary Deduction", "Need Approval",
     ];
     const rows = filteredRows.map((row) => [
       row.mobile_no, row.emp_no ?? "", row.name ?? "Unmatched number", row.project_label ?? "",
+      Number(row.total_usage_charges),
       ...(hasBreakdown
         ? [
             row.voice_rental != null ? Number(row.voice_rental) : "",
@@ -112,7 +151,7 @@ export default function BillsPage() {
       Number(row.vas), Number(row.add_to_bill_charges), Number(row.salary_deduction), row.need_approval,
     ]);
     const totalsRow = [
-      "Total", "", "", "",
+      "Total", "", "", "", Number(totals.total_usage_charges.toFixed(2)),
       ...(hasBreakdown
         ? [
             Number(totals.voice_rental.toFixed(2)), Number(totals.voice_usage.toFixed(2)), Number(totals.sms.toFixed(2)),
@@ -149,9 +188,20 @@ export default function BillsPage() {
               )}
             </p>
           </div>
-          <button className="btn btn-ghost" onClick={handleExport}>
-            Export to Excel
-          </button>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button className="btn btn-ghost" onClick={handleOpenBucketRatePanel}>
+              Set bucket rate
+            </button>
+            <button className="btn btn-ghost" onClick={() => setShowBucketExclusionPanel(true)}>
+              Manage bucket exclusion
+            </button>
+            <button className="btn btn-ghost" onClick={() => setShowManageDataBucketPanel(true)}>
+              Manage data bucket
+            </button>
+            <button className="btn btn-ghost" onClick={handleExport}>
+              Export to Excel
+            </button>
+          </div>
         </div>
 
         <div className="toolbar">
@@ -171,6 +221,7 @@ export default function BillsPage() {
                 <th>EMP No</th>
                 <th>Name</th>
                 <th>Project</th>
+                <th>Total Usage Charges</th>
                 {hasBreakdown && (
                   <>
                     <th>Voice Rental</th>
@@ -196,14 +247,14 @@ export default function BillsPage() {
             <tbody>
               {loadingSummary && (
                 <tr>
-                  <td colSpan={hasBreakdown ? 20 : 15} className="empty-row">
+                  <td colSpan={hasBreakdown ? 21 : 16} className="empty-row">
                     Loading…
                   </td>
                 </tr>
               )}
               {!loadingSummary && filteredRows.length === 0 && (
                 <tr>
-                  <td colSpan={hasBreakdown ? 20 : 15} className="empty-row">
+                  <td colSpan={hasBreakdown ? 21 : 16} className="empty-row">
                     No rows match.
                   </td>
                 </tr>
@@ -221,6 +272,7 @@ export default function BillsPage() {
                         <span className="muted">—</span>
                       )}
                     </td>
+                    <td className="mono">{money(row.total_usage_charges)}</td>
                     {hasBreakdown && (
                       <>
                         <td className="mono">{row.voice_rental != null ? money(Number(row.voice_rental)) : "—"}</td>
@@ -235,7 +287,10 @@ export default function BillsPage() {
                     <td className="mono">{money(row.charges_for_bill_period)}</td>
                     <td className="mono">{money(row.vat)}</td>
                     <td className="mono">{money(row.net_amount)}</td>
-                    <td className="mono">{money(row.bucket_cost)}</td>
+                    <td className="mono">
+                      {money(row.bucket_cost)}
+                      {row.is_bucket_excluded && <span className="pill pill-transferred" style={{ marginLeft: 6 }}>Excluded</span>}
+                    </td>
                     <td className="mono">{money(row.total)}</td>
                     <td className="mono">{Number(row.vas) > 0 ? money(row.vas) : "—"}</td>
                     <td className="mono">{Number(row.add_to_bill_charges) > 0 ? money(row.add_to_bill_charges) : "—"}</td>
@@ -249,8 +304,9 @@ export default function BillsPage() {
                         <option value="OK" className="approval-option-ok">OK</option>
                         <option value="Need Approval" className="approval-option-attention">Need Approval</option>
                         <option value="Manager approved" className="approval-option-manager">Manager approved</option>
+                        <option value="Deducted from Salary" className="approval-option-salary-deducted">Deducted from Salary</option>
                         {/* Preserve any other legacy free-text override so the select never shows blank */}
-                        {!["OK", "Need Approval", "Manager approved"].includes(row.need_approval) && (
+                        {!["OK", "Need Approval", "Manager approved", "Deducted from Salary"].includes(row.need_approval) && (
                           <option value={row.need_approval}>{row.need_approval}</option>
                         )}
                       </select>
@@ -263,6 +319,7 @@ export default function BillsPage() {
                   <td></td>
                   <td></td>
                   <td></td>
+                  <td className="mono">{money(totals.total_usage_charges)}</td>
                   {hasBreakdown && (
                     <>
                       <td className="mono">{money(totals.voice_rental)}</td>
@@ -288,6 +345,32 @@ export default function BillsPage() {
             </tbody>
           </table>
         </div>
+
+        {showBucketExclusionPanel && (
+          <BucketExclusionPanel
+            rows={summaryRows}
+            onSave={handleSetBucketExclusion}
+            onCancel={() => setShowBucketExclusionPanel(false)}
+          />
+        )}
+
+        {showManageDataBucketPanel && (
+          <ManageDataBucketPanel
+            rows={summaryRows}
+            onSave={handleSetLineItemCharges}
+            onCancel={() => setShowManageDataBucketPanel(false)}
+          />
+        )}
+
+        {showBucketRatePanel && (
+          <BucketRatePanel
+            periodLabel={selectedPeriod.label}
+            currentOverrideCost={selectedPeriod.bucket_cost_override}
+            currentOverrideVat={selectedPeriod.bucket_vat_override}
+            onSave={handleSaveBucketRate}
+            onCancel={() => setShowBucketRatePanel(false)}
+          />
+        )}
       </div>
     );
   }

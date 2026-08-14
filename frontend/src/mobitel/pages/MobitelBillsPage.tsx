@@ -1,10 +1,12 @@
 import { useEffect, useState, useCallback } from "react";
 import type { MobitelBillPeriod, MobitelBillLineItemOut } from "../types/mobitel";
-import { listMobitelBillPeriods, getMobitelBillSummary, setMobitelStaticIpCost, deleteMobitelBillPeriod } from "../api/mobitel";
+import { listMobitelBillPeriods, getMobitelBillSummary, setMobitelStaticIpCost, setMobitelProjectCost, deleteMobitelBillPeriod } from "../api/mobitel";
 import MobitelBillUploadPanel from "../components/MobitelBillUploadPanel";
 import MobitelManageStaticIpPanel from "../components/MobitelManageStaticIpPanel";
+import MobitelManageProjectCostPanel from "../components/MobitelManageProjectCostPanel";
 import MobitelConfirmPanel from "../components/MobitelConfirmPanel";
 import { exportTeamCostToExcel } from "../../utils/exportTeamCost";
+import { exportTableToExcel } from "../../utils/exportTable";
 
 export default function MobitelBillsPage() {
   const [periods, setPeriods] = useState<MobitelBillPeriod[]>([]);
@@ -15,6 +17,7 @@ export default function MobitelBillsPage() {
   const [showUpload, setShowUpload] = useState(false);
   const [search, setSearch] = useState("");
   const [showStaticIpPanel, setShowStaticIpPanel] = useState(false);
+  const [showProjectCostPanel, setShowProjectCostPanel] = useState(false);
   const [deletingPeriod, setDeletingPeriod] = useState<MobitelBillPeriod | null>(null);
   const [showBreakdown, setShowBreakdown] = useState(false);
 
@@ -48,6 +51,17 @@ export default function MobitelBillsPage() {
     // in sync with the recalculation — previously only selectedPeriod was
     // updated, so going "back" to the list showed a stale reconciliation
     // value until a manual page refresh.
+    const refreshedPeriods = await listMobitelBillPeriods();
+    setPeriods(refreshedPeriods);
+    if (selectedPeriod) {
+      const refreshed = refreshedPeriods.find((p) => p.id === selectedPeriod.id);
+      if (refreshed) setSelectedPeriod(refreshed);
+    }
+  }
+
+  async function handleSetProjectCost(lineItemId: string, isProjectCost: boolean, amount: string | null) {
+    const rows = await setMobitelProjectCost(lineItemId, isProjectCost, amount);
+    setSummaryRows(rows);
     const refreshedPeriods = await listMobitelBillPeriods();
     setPeriods(refreshedPeriods);
     if (selectedPeriod) {
@@ -100,6 +114,46 @@ export default function MobitelBillsPage() {
   // glance rather than only available as a single "off by Rs. X" pill.
   const sumOfLineItems = summaryRows.reduce((sum, r) => sum + Number(r.total), 0);
 
+  function handleExport() {
+    if (!selectedPeriod) return;
+    const headers = [
+      "EMP No", "Name", "Mobile No", "LOB", "LOB Code",
+      ...(hasUsageData
+        ? ["IMSI", "Data Allocated (Mb)", "Data Available (Mb)", "Data Utilized (Mb)", "Daily Limit (Mb)", "Member Status"]
+        : []),
+      "Data Cost", "Project Cost", "Static IP Cost", "Total",
+    ];
+    const rows = filteredRows.map((row) => [
+      row.emp_no ?? "", row.name ?? "", row.mobile_no ?? "", row.lob ?? "", row.lob_code ?? "",
+      ...(hasUsageData
+        ? [
+            row.imsi_number ?? "",
+            row.data_volume_mb != null ? Number(row.data_volume_mb) : "",
+            row.available_data_volume_mb != null ? Number(row.available_data_volume_mb) : "",
+            row.utilized_data_volume_mb != null ? Number(row.utilized_data_volume_mb) : "",
+            row.daily_limit_mb != null ? Number(row.daily_limit_mb) : "",
+            row.member_status ?? "",
+          ]
+        : []),
+      Number(row.data_cost), row.is_project_cost ? "Yes" : "No",
+      Number(row.static_ip_cost), Number(row.total),
+    ]);
+    const totalsRow = [
+      "Total", "", "", "", "",
+      ...(hasUsageData ? ["", "", "", "", "", ""] : []),
+      Number(filteredRows.reduce((s, r) => s + Number(r.data_cost), 0).toFixed(2)),
+      "",
+      Number(filteredRows.reduce((s, r) => s + Number(r.static_ip_cost), 0).toFixed(2)),
+      Number(filteredRows.reduce((s, r) => s + Number(r.total), 0).toFixed(2)),
+    ];
+    exportTableToExcel(
+      headers,
+      [...rows, totalsRow],
+      `MobitelData_${selectedPeriod.label.replace(/\s+/g, "_")}_summary.xlsx`,
+      "Summary"
+    );
+  }
+
   if (selectedPeriod) {
     return (
       <div className="page">
@@ -121,8 +175,14 @@ export default function MobitelBillsPage() {
             <button className="btn btn-ghost" onClick={() => setShowStaticIpPanel(true)}>
               Manage static IP
             </button>
+            <button className="btn btn-ghost" onClick={() => setShowProjectCostPanel(true)}>
+              Manage project cost
+            </button>
             <button className="btn btn-ghost" onClick={() => setShowBreakdown((v) => !v)}>
               {showBreakdown ? "Hide" : "Show"} team cost & reconciliation
+            </button>
+            <button className="btn btn-ghost" onClick={handleExport}>
+              Export to Excel
             </button>
           </div>
         </div>
@@ -275,7 +335,10 @@ export default function MobitelBillsPage() {
                         <td>{row.member_status || <span className="muted">—</span>}</td>
                       </>
                     )}
-                    <td className="mono">{money(row.data_cost)}</td>
+                    <td className="mono">
+                      {money(row.data_cost)}
+                      {row.is_project_cost && <span className="pill pill-transferred" style={{ marginLeft: 6 }}>Project</span>}
+                    </td>
                     <td className="mono">{Number(row.static_ip_cost) > 0 ? money(row.static_ip_cost) : "—"}</td>
                     <td className="mono">{money(row.total)}</td>
                   </tr>
@@ -289,6 +352,14 @@ export default function MobitelBillsPage() {
             rows={summaryRows}
             onSave={handleSetStaticIpCost}
             onCancel={() => setShowStaticIpPanel(false)}
+          />
+        )}
+
+        {showProjectCostPanel && (
+          <MobitelManageProjectCostPanel
+            rows={summaryRows}
+            onSave={handleSetProjectCost}
+            onCancel={() => setShowProjectCostPanel(false)}
           />
         )}
       </div>

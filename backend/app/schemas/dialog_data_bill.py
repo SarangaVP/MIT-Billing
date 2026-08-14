@@ -41,6 +41,11 @@ class DialogDataImportResult(BaseModel):
     unmatched_in_bill_sheet: list[str] = []
 
 
+class DialogDataProjectCostUpdateInput(BaseModel):
+    is_project_cost: bool
+    project_cost_amount: Decimal | None = None
+
+
 class DialogDataBillLineItemOut(BaseModel):
     id: uuid.UUID
     connection_id: uuid.UUID
@@ -50,6 +55,8 @@ class DialogDataBillLineItemOut(BaseModel):
     lob_code: str | None = None
     connection_no: str | None
     cost: Decimal
+    is_project_cost: bool = False
+    project_cost_amount: Decimal | None = None
 
     allocation_gb: str | None = None
     usage_gb: str | None = None

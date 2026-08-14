@@ -301,6 +301,8 @@ def get_summary(db: Session, bill_period_id: uuid.UUID) -> list[dict]:
             "mobile_no": conn.mobile_no,
             "data_cost": li.data_cost,
             "static_ip_cost": li.static_ip_cost,
+            "is_project_cost": li.is_project_cost,
+            "project_cost_amount": li.project_cost_amount,
             "total": li.total,
             "imsi_number": li.imsi_number,
             "data_volume_mb": li.data_volume_mb,
@@ -316,36 +318,47 @@ def get_summary(db: Session, bill_period_id: uuid.UUID) -> list[dict]:
     ]
 
 
-def update_static_ip_cost(db: Session, line_item_id: uuid.UUID, new_cost: Decimal) -> list[dict]:
+def _recalculate_period(db: Session, bill_period: MobitelBillPeriod) -> None:
     """
-    Sets one line item's static IP cost for THIS bill period specifically,
-    then recalculates the whole period: since the per-user data cost is
-    (Net - total static IP) / Users, changing any one employee's static IP
-    cost changes the split for EVERYONE in that period, not just them.
+    Shared by update_static_ip_cost and update_project_cost — both change a
+    per-connection cost that affects everyone else's split, so both need
+    the identical whole-period recompute.
+
+    Project-cost items (is_project_cost=True) are excluded from BOTH the
+    shared pool and the headcount — confirmed against a real bill where
+    2 people had a manually-set data cost with no detectable rule behind
+    it: their amounts were subtracted from Net, and they were removed
+    from Users, before the remaining people split what's left evenly.
+    Verified this exact reconstruction reproduces the real file's numbers
+    to the cent (net=280,209.32, 2 project costs totaling 15,060.75, one
+    static IP of 1,500 -> per-user 2,215.53 across the remaining 119).
     """
-    line_item = db.query(MobitelBillLineItem).filter(MobitelBillLineItem.id == line_item_id).first()
-    if not line_item:
-        raise HTTPException(status_code=404, detail="Bill line item not found")
-
-    bill_period = get_bill_period(db, line_item.bill_period_id)
-
-    line_item.static_ip_cost = new_cost
-    db.flush()
-
     all_items = (
         db.query(MobitelBillLineItem)
         .filter(MobitelBillLineItem.bill_period_id == bill_period.id)
         .all()
     )
-    users = len(all_items)
+    project_items = [item for item in all_items if item.is_project_cost]
+    normal_items = [item for item in all_items if not item.is_project_cost]
+
+    users = len(normal_items)
+    if users == 0:
+        raise HTTPException(status_code=422, detail="Every connection on this bill is marked project-cost — nothing left to split")
+
     total_static_ip = sum((item.static_ip_cost or Decimal("0")) for item in all_items)
+    total_project_cost = sum((item.project_cost_amount or Decimal("0")) for item in project_items)
     net = bill_period.net or Decimal("0")
 
-    per_user_cost = ((net - total_static_ip) / users).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+    per_user_cost = ((net - total_static_ip - total_project_cost) / users).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
 
     line_total = Decimal("0")
-    for item in all_items:
+    for item in normal_items:
         item.data_cost = per_user_cost.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        item.total = (item.data_cost + (item.static_ip_cost or Decimal("0"))).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        line_total += item.total
+
+    for item in project_items:
+        item.data_cost = (item.project_cost_amount or Decimal("0")).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
         item.total = (item.data_cost + (item.static_ip_cost or Decimal("0"))).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
         line_total += item.total
 
@@ -354,6 +367,50 @@ def update_static_ip_cost(db: Session, line_item_id: uuid.UUID, new_cost: Decima
     bill_period.reconciled = abs(discrepancy) < Decimal("0.01")
     bill_period.reconciliation_discrepancy = discrepancy
 
+
+def update_static_ip_cost(db: Session, line_item_id: uuid.UUID, new_cost: Decimal) -> list[dict]:
+    """
+    Sets one line item's static IP cost for THIS bill period specifically,
+    then recalculates the whole period: since the per-user data cost is
+    (Net - total static IP - total project cost) / Users, changing any one
+    connection's static IP cost changes the split for everyone else too.
+    """
+    line_item = db.query(MobitelBillLineItem).filter(MobitelBillLineItem.id == line_item_id).first()
+    if not line_item:
+        raise HTTPException(status_code=404, detail="Bill line item not found")
+
+    bill_period = get_bill_period(db, line_item.bill_period_id)
+    line_item.static_ip_cost = new_cost
+    db.flush()
+
+    _recalculate_period(db, bill_period)
+    db.commit()
+
+    return get_summary(db, bill_period.id)
+
+
+def update_project_cost(db: Session, line_item_id: uuid.UUID, is_project_cost: bool, project_cost_amount: Decimal | None) -> list[dict]:
+    """
+    Marks (or unmarks) one connection as having a manually-set project cost
+    for THIS bill period — used when a real charge is a known specific
+    amount with no detectable automated rule behind it (confirmed real
+    cases: an SLA-based rate, and one with no discernible pattern at
+    all). Excludes that connection from both the shared pool and the
+    headcount for everyone else's equal split, then recalculates.
+    """
+    if is_project_cost and project_cost_amount is None:
+        raise HTTPException(status_code=422, detail="project_cost_amount is required when is_project_cost is true")
+
+    line_item = db.query(MobitelBillLineItem).filter(MobitelBillLineItem.id == line_item_id).first()
+    if not line_item:
+        raise HTTPException(status_code=404, detail="Bill line item not found")
+
+    bill_period = get_bill_period(db, line_item.bill_period_id)
+    line_item.is_project_cost = is_project_cost
+    line_item.project_cost_amount = project_cost_amount if is_project_cost else None
+    db.flush()
+
+    _recalculate_period(db, bill_period)
     db.commit()
 
     return get_summary(db, bill_period.id)

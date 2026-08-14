@@ -17,9 +17,18 @@ class BillPeriodOut(BaseModel):
     source_format: str
     reconciled: bool
     reconciliation_discrepancy: Decimal | None
+    bucket_cost_override: Decimal | None
+    bucket_vat_override: Decimal | None
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class BucketRateOverrideInput(BaseModel):
+    # Both null clears the override, reverting this bill period back to
+    # whatever rate is active in the standard rate table.
+    bucket_cost_override: Decimal | None = None
+    bucket_vat_override: Decimal | None = None
 
 
 class ImportResult(BaseModel):
@@ -34,6 +43,28 @@ class ImportResult(BaseModel):
 
 class ApprovalOverrideInput(BaseModel):
     approval_override: str | None  # e.g. "Manager approved", or null to clear it
+
+
+class BucketExclusionInput(BaseModel):
+    is_bucket_excluded: bool
+
+
+class LineItemChargeUpdateInput(BaseModel):
+    """
+    Manual correction to a line item's raw charge figures for THIS bill
+    period — used via "Manage data bucket" for cases where a connection's
+    real billed amount needs a manual fix (e.g. a shared/General line's
+    genuine usage charge that should read differently than what the bill
+    parsed). Every field is required, since this replaces the full set
+    that feeds net_amount/total together.
+    """
+    total_usage_charges: Decimal
+    idd: Decimal
+    roaming: Decimal
+    charges_for_bill_period: Decimal
+    vat: Decimal
+    vas: Decimal
+    add_to_bill_charges: Decimal
 
 
 class BillSummaryRow(BaseModel):
@@ -79,3 +110,5 @@ class BillSummaryRow(BaseModel):
     salary_deduction: Decimal
     need_approval: str
     is_overridden: bool
+    is_general_line: bool
+    is_bucket_excluded: bool

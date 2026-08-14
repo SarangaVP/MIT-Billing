@@ -91,6 +91,13 @@ export function setMobitelStaticIpCost(lineItemId: string, cost: string): Promis
   });
 }
 
+export function setMobitelProjectCost(lineItemId: string, isProjectCost: boolean, projectCostAmount: string | null): Promise<MobitelBillLineItemOut[]> {
+  return request<MobitelBillLineItemOut[]>(`/mobitel/bills/line-items/${lineItemId}/project-cost`, {
+    method: "PUT",
+    body: JSON.stringify({ is_project_cost: isProjectCost, project_cost_amount: projectCostAmount }),
+  });
+}
+
 export async function deleteMobitelBillPeriod(billPeriodId: string): Promise<void> {
   const res = await fetch(`${BASE_URL}/mobitel/bills/${billPeriodId}`, { method: "DELETE" });
   if (!res.ok) {

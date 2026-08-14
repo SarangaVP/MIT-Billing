@@ -15,10 +15,9 @@ from app.ingestion.xls_summary_parser import (
 )
 from app.models.bill_period import BillPeriod
 from app.models.bill_line_item import BillLineItem
-from app.models.bucket_rate import BucketRate
 from app.models.mobile_number import MobileNumber
 from app.models.employee import Employee
-from app.schemas.bill import BillSummaryRow, ImportResult, ApprovalOverrideInput
+from app.schemas.bill import BillSummaryRow, ImportResult, ApprovalOverrideInput, LineItemChargeUpdateInput
 
 
 def _parse_date(value: str | None, fmt: str) -> date | None:
@@ -134,15 +133,6 @@ def import_bill_file(db: Session, file_path: str, label: str, source_format: str
     )
 
 
-def _get_active_bucket_rate(db: Session, as_of: date) -> BucketRate | None:
-    return (
-        db.query(BucketRate)
-        .filter(BucketRate.effective_from <= as_of)
-        .order_by(BucketRate.effective_from.desc())
-        .first()
-    )
-
-
 def get_bill_period(db: Session, bill_period_id: uuid.UUID) -> BillPeriod:
     period = db.query(BillPeriod).filter(BillPeriod.id == bill_period_id).first()
     if not period:
@@ -164,7 +154,7 @@ def list_bill_periods(db: Session) -> list[BillPeriod]:
 def get_summary(db: Session, bill_period_id: uuid.UUID) -> list[BillSummaryRow]:
     period = get_bill_period(db, bill_period_id)
     line_items = db.query(BillLineItem).filter(BillLineItem.bill_period_id == period.id).all()
-    return _build_summary_rows(db, line_items, as_of=period.invoice_date)
+    return _build_summary_rows(db, line_items, bill_period=period)
 
 
 def get_summary_row_for_line_item(db: Session, line_item_id: uuid.UUID) -> BillSummaryRow:
@@ -172,16 +162,17 @@ def get_summary_row_for_line_item(db: Session, line_item_id: uuid.UUID) -> BillS
     if not line_item:
         raise HTTPException(status_code=404, detail="Bill line item not found")
     period = get_bill_period(db, line_item.bill_period_id)
-    rows = _build_summary_rows(db, [line_item], as_of=period.invoice_date)
+    rows = _build_summary_rows(db, [line_item], bill_period=period)
     return rows[0]
 
 
-def _build_summary_rows(db: Session, line_items: list[BillLineItem], as_of: date | None) -> list[BillSummaryRow]:
-    as_of = as_of or datetime.utcnow().date()
-    bucket_rate = _get_active_bucket_rate(db, as_of)
-    bucket_cost = bucket_rate.cost if bucket_rate else Decimal("0")
-    bucket_vat = bucket_rate.vat if bucket_rate else Decimal("0")
-    bucket_nett = bucket_cost - bucket_vat
+def _build_summary_rows(db: Session, line_items: list[BillLineItem], bill_period: BillPeriod) -> list[BillSummaryRow]:
+    # There is no standard/fallback bucket rate anymore — every bill period
+    # requires an explicit "Set bucket rate" override (set via the Bills
+    # page for that specific month). Until someone sets one, the bucket
+    # cost/VAT for that month is simply zero.
+    standard_bucket_cost = bill_period.bucket_cost_override or Decimal("0")
+    standard_bucket_vat = bill_period.bucket_vat_override or Decimal("0")
 
     mobile_nos = [li.mobile_no for li in line_items]
     number_rows = (
@@ -199,6 +190,40 @@ def _build_summary_rows(db: Session, line_items: list[BillLineItem], as_of: date
     results = []
     for li in line_items:
         employee = employee_by_mobile.get(li.mobile_no)
+
+        # Confirmed against real data: a number that's disconnected that
+        # month shows EXACTLY zero total_usage_charges AND zero
+        # charges_for_bill_period on the actual telecom invoice — checked
+        # against 611 genuinely active numbers (0 false positives) and
+        # 139 genuinely disconnected numbers (139/139 correctly zero) in
+        # a real July bill. The bucket allocation shouldn't apply to a
+        # disconnected number — this is a real signal already present in
+        # the bill itself, not something requiring any external status
+        # tracking.
+        is_disconnected_this_month = li.total_usage_charges == 0 and li.charges_for_bill_period == 0
+
+        # Confirmed against a SEPARATE real bill: Interns never get the
+        # bucket allocation, even with substantial real usage that
+        # month — 100% clean across 82 real Intern rows, zero exceptions
+        # either direction. Unlike disconnection, this genuinely can't be
+        # inferred from usage — it's tied to cadre, which we already
+        # store on the employee.
+        is_intern = bool(employee and employee.cadre and employee.cadre.strip().lower() == "intern")
+        is_general_line = bool(employee and employee.is_general_line)
+
+        # General lines are NO LONGER auto-excluded from the bucket just
+        # for being a General line — that's now a deliberate per-month
+        # decision (li.is_bucket_excluded, set via "Manage bucket
+        # exclusion" in the UI), since not every General line should
+        # necessarily be excluded every single month. Disconnection and
+        # Intern status remain fully automatic.
+        if is_disconnected_this_month or is_intern or li.is_bucket_excluded:
+            bucket_cost = Decimal("0")
+            bucket_vat = Decimal("0")
+        else:
+            bucket_cost = standard_bucket_cost
+            bucket_vat = standard_bucket_vat
+        bucket_nett = bucket_cost - bucket_vat
 
         net_amount = li.charges_for_bill_period - li.vat
         total = net_amount + bucket_nett
@@ -247,6 +272,8 @@ def _build_summary_rows(db: Session, line_items: list[BillLineItem], as_of: date
             salary_deduction=salary_deduction,
             need_approval=need_approval,
             is_overridden=is_overridden,
+            is_general_line=is_general_line,
+            is_bucket_excluded=li.is_bucket_excluded,
         ))
 
     return results
@@ -258,6 +285,66 @@ def set_approval_override(db: Session, line_item_id: uuid.UUID, payload: Approva
         raise HTTPException(status_code=404, detail="Bill line item not found")
 
     line_item.approval_override = payload.approval_override
+    db.commit()
+    db.refresh(line_item)
+    return get_summary_row_for_line_item(db, line_item_id)
+
+
+def update_line_item_charges(db: Session, line_item_id: uuid.UUID, payload: LineItemChargeUpdateInput) -> BillSummaryRow:
+    """
+    Manual correction to a line item's raw charge figures for THIS bill
+    period ("Manage data bucket" in the UI) — used for cases where the
+    real billed amount needs a manual fix (e.g. a shared/General line's
+    genuine usage charge, or any other connection whose parsed figures
+    are wrong for this month). net_amount/total recompute automatically
+    on the next read, same as everything else in this module.
+    """
+    line_item = db.query(BillLineItem).filter(BillLineItem.id == line_item_id).first()
+    if not line_item:
+        raise HTTPException(status_code=404, detail="Bill line item not found")
+
+    line_item.total_usage_charges = payload.total_usage_charges
+    line_item.idd = payload.idd
+    line_item.roaming = payload.roaming
+    line_item.charges_for_bill_period = payload.charges_for_bill_period
+    line_item.vat = payload.vat
+    line_item.vas = payload.vas
+    line_item.add_to_bill_charges = payload.add_to_bill_charges
+    db.commit()
+    db.refresh(line_item)
+    return get_summary_row_for_line_item(db, line_item_id)
+
+
+def set_bucket_rate_override(db: Session, bill_period_id: uuid.UUID, cost: Decimal | None, vat: Decimal | None) -> list[BillSummaryRow]:
+    """
+    Sets (or clears, if both are None) a bucket rate override for THIS
+    bill period only — unlike the standard rate table, this never affects
+    any other month. Recalculation is automatic: bucket_cost/bucket_vat
+    are computed live in _build_summary_rows on every read, so nothing
+    needs to be persisted per line item here.
+    """
+    period = get_bill_period(db, bill_period_id)
+    period.bucket_cost_override = cost
+    period.bucket_vat_override = vat
+    db.commit()
+    return get_summary(db, bill_period_id)
+
+
+def set_bucket_exclusion(db: Session, line_item_id: uuid.UUID, is_bucket_excluded: bool) -> BillSummaryRow:
+    """
+    Marks/unmarks one connection as excluded from the bucket allocation
+    for THIS bill period specifically — a deliberate per-month decision,
+    typically used for "General" lines (see Employee.is_general_line).
+    Unlike Mobitel's project cost, this doesn't touch anyone else's
+    numbers: the bucket rate here isn't a shared pool split across
+    everyone, it's a flat per-connection allocation, so zeroing one
+    row's bucket_cost/bucket_vat has zero effect on any other row.
+    """
+    line_item = db.query(BillLineItem).filter(BillLineItem.id == line_item_id).first()
+    if not line_item:
+        raise HTTPException(status_code=404, detail="Bill line item not found")
+
+    line_item.is_bucket_excluded = is_bucket_excluded
     db.commit()
     db.refresh(line_item)
     return get_summary_row_for_line_item(db, line_item_id)

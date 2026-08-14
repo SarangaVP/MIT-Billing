@@ -1,7 +1,6 @@
 import { useState } from "react";
 import EmployeesPage from "./pages/EmployeesPage";
 import BillsPage from "./pages/BillsPage";
-import SettingsPage from "./pages/SettingsPage";
 import MobitelEmployeesPage from "./mobitel/pages/MobitelEmployeesPage";
 import MobitelBillsPage from "./mobitel/pages/MobitelBillsPage";
 import DialogDataEmployeesPage from "./dialog-data/pages/DialogDataEmployeesPage";
@@ -11,7 +10,7 @@ import SltGeneralBillsPage from "./slt/pages/SltGeneralBillsPage";
 import "./App.css";
 
 type Module = "dialog_mobile" | "mobitel_data_bucket" | "dialog_data_bucket" | "slt";
-type DialogTab = "employees" | "bills" | "settings";
+type DialogTab = "employees" | "bills";
 type MobitelTab = "employees" | "bills";
 type DialogDataTab = "employees" | "bills";
 type SltTab = "team_package" | "general";
@@ -66,9 +65,6 @@ export default function App() {
           <span className={`subnav-item ${dialogTab === "bills" ? "active" : ""}`} onClick={() => setDialogTab("bills")}>
             Bills
           </span>
-          <span className={`subnav-item ${dialogTab === "settings" ? "active" : ""}`} onClick={() => setDialogTab("settings")}>
-            Settings
-          </span>
         </div>
       )}
 
@@ -108,7 +104,6 @@ export default function App() {
       <main className="content">
         {module === "dialog_mobile" && dialogTab === "employees" && <EmployeesPage />}
         {module === "dialog_mobile" && dialogTab === "bills" && <BillsPage />}
-        {module === "dialog_mobile" && dialogTab === "settings" && <SettingsPage />}
 
         {module === "mobitel_data_bucket" && mobitelTab === "employees" && <MobitelEmployeesPage />}
         {module === "mobitel_data_bucket" && mobitelTab === "bills" && <MobitelBillsPage />}

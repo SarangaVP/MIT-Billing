@@ -18,6 +18,8 @@ export interface BillPeriod {
   source_format: SourceFormat;
   reconciled: boolean;
   reconciliation_discrepancy: string | null;
+  bucket_cost_override: string | null;
+  bucket_vat_override: string | null;
   created_at: string;
 }
 
@@ -68,8 +70,29 @@ export interface BillSummaryRow {
   salary_deduction: string;
   need_approval: string;
   is_overridden: boolean;
+  is_general_line: boolean;
+  is_bucket_excluded: boolean;
 }
 
 export interface ApprovalOverrideInput {
   approval_override: string | null;
+}
+
+export interface BucketExclusionInput {
+  is_bucket_excluded: boolean;
+}
+
+export interface BucketRateOverrideInput {
+  bucket_cost_override: number | null;
+  bucket_vat_override: number | null;
+}
+
+export interface LineItemChargeUpdateInput {
+  total_usage_charges: number;
+  idd: number;
+  roaming: number;
+  charges_for_bill_period: number;
+  vat: number;
+  vas: number;
+  add_to_bill_charges: number;
 }

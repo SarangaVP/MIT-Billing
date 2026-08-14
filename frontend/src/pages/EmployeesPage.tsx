@@ -143,7 +143,7 @@ export default function EmployeesPage() {
                   <td className="mono">{emp.emp_no}</td>
                   <td>
                     {emp.name}
-                    {emp.is_shared_line && <span className="pill pill-transferred" style={{ marginLeft: 8 }}>Shared Line</span>}
+                    {emp.is_general_line && <span className="pill pill-transferred" style={{ marginLeft: 8 }}>General Line</span>}
                   </td>
                   <td>{emp.lob || <span className="muted">—</span>}</td>
                   <td>{emp.cadre || <span className="muted">—</span>}</td>
