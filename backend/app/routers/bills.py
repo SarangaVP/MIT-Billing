@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, UploadFile, File, Form, HTTPException
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.schemas.bill import ImportResult, BillSummaryRow, ApprovalOverrideInput, BucketExclusionInput, BucketRateOverrideInput, BillPeriodOut
+from app.schemas.bill import ImportResult, BillSummaryRow, ApprovalOverrideInput, BucketExclusionInput, BucketRateOverrideInput, LineItemChargeUpdateInput, BillPeriodOut
 from app.services import bill_service
 
 router = APIRouter(prefix="/bills", tags=["bills"])
@@ -77,3 +77,13 @@ def set_bucket_rate_override(bill_period_id: uuid.UUID, payload: BucketRateOverr
 @router.put("/line-items/{line_item_id}/bucket-exclusion", response_model=BillSummaryRow)
 def set_bucket_exclusion(line_item_id: uuid.UUID, payload: BucketExclusionInput, db: Session = Depends(get_db)):
     return bill_service.set_bucket_exclusion(db, line_item_id, payload.is_bucket_excluded)
+
+
+@router.put("/line-items/{line_item_id}/charges", response_model=BillSummaryRow)
+def update_line_item_charges(line_item_id: uuid.UUID, payload: LineItemChargeUpdateInput, db: Session = Depends(get_db)):
+    """
+    Manual correction to a line item's raw charge figures for this bill
+    period ("Manage data bucket" in the UI) — net_amount/total recompute
+    automatically from these on the next read.
+    """
+    return bill_service.update_line_item_charges(db, line_item_id, payload)

@@ -86,3 +86,13 @@ export interface BucketRateOverrideInput {
   bucket_cost_override: number | null;
   bucket_vat_override: number | null;
 }
+
+export interface LineItemChargeUpdateInput {
+  total_usage_charges: number;
+  idd: number;
+  roaming: number;
+  charges_for_bill_period: number;
+  vat: number;
+  vas: number;
+  add_to_bill_charges: number;
+}

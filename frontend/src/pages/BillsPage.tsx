@@ -1,9 +1,10 @@
 import { useEffect, useState, useCallback } from "react";
-import type { BillPeriod, BillSummaryRow } from "../types/bill";
-import { listBillPeriods, getBillSummary, setApprovalOverride, setBucketExclusion, setBucketRateOverride, deleteBillPeriod } from "../api/bills";
+import type { BillPeriod, BillSummaryRow, LineItemChargeUpdateInput } from "../types/bill";
+import { listBillPeriods, getBillSummary, setApprovalOverride, setBucketExclusion, setBucketRateOverride, setLineItemCharges, deleteBillPeriod } from "../api/bills";
 import BillUploadPanel from "../components/BillUploadPanel";
 import BucketExclusionPanel from "../components/BucketExclusionPanel";
 import BucketRatePanel from "../components/BucketRatePanel";
+import ManageDataBucketPanel from "../components/ManageDataBucketPanel";
 import ConfirmPanel from "../components/ConfirmPanel";
 import { exportTableToExcel } from "../utils/exportTable";
 
@@ -18,6 +19,7 @@ export default function BillsPage() {
   const [deletingPeriod, setDeletingPeriod] = useState<BillPeriod | null>(null);
   const [showBucketExclusionPanel, setShowBucketExclusionPanel] = useState(false);
   const [showBucketRatePanel, setShowBucketRatePanel] = useState(false);
+  const [showManageDataBucketPanel, setShowManageDataBucketPanel] = useState(false);
 
   const loadPeriods = useCallback(async () => {
     setLoadingPeriods(true);
@@ -49,6 +51,11 @@ export default function BillsPage() {
 
   async function handleSetBucketExclusion(lineItemId: string, isBucketExcluded: boolean) {
     const updated = await setBucketExclusion(lineItemId, { is_bucket_excluded: isBucketExcluded });
+    setSummaryRows((rows) => rows.map((r) => (r.bill_line_item_id === updated.bill_line_item_id ? updated : r)));
+  }
+
+  async function handleSetLineItemCharges(lineItemId: string, payload: LineItemChargeUpdateInput) {
+    const updated = await setLineItemCharges(lineItemId, payload);
     setSummaryRows((rows) => rows.map((r) => (r.bill_line_item_id === updated.bill_line_item_id ? updated : r)));
   }
 
@@ -187,6 +194,9 @@ export default function BillsPage() {
             </button>
             <button className="btn btn-ghost" onClick={() => setShowBucketExclusionPanel(true)}>
               Manage bucket exclusion
+            </button>
+            <button className="btn btn-ghost" onClick={() => setShowManageDataBucketPanel(true)}>
+              Manage data bucket
             </button>
             <button className="btn btn-ghost" onClick={handleExport}>
               Export to Excel
@@ -341,6 +351,14 @@ export default function BillsPage() {
             rows={summaryRows}
             onSave={handleSetBucketExclusion}
             onCancel={() => setShowBucketExclusionPanel(false)}
+          />
+        )}
+
+        {showManageDataBucketPanel && (
+          <ManageDataBucketPanel
+            rows={summaryRows}
+            onSave={handleSetLineItemCharges}
+            onCancel={() => setShowManageDataBucketPanel(false)}
           />
         )}
 

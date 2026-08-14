@@ -17,7 +17,7 @@ from app.models.bill_period import BillPeriod
 from app.models.bill_line_item import BillLineItem
 from app.models.mobile_number import MobileNumber
 from app.models.employee import Employee
-from app.schemas.bill import BillSummaryRow, ImportResult, ApprovalOverrideInput
+from app.schemas.bill import BillSummaryRow, ImportResult, ApprovalOverrideInput, LineItemChargeUpdateInput
 
 
 def _parse_date(value: str | None, fmt: str) -> date | None:
@@ -285,6 +285,31 @@ def set_approval_override(db: Session, line_item_id: uuid.UUID, payload: Approva
         raise HTTPException(status_code=404, detail="Bill line item not found")
 
     line_item.approval_override = payload.approval_override
+    db.commit()
+    db.refresh(line_item)
+    return get_summary_row_for_line_item(db, line_item_id)
+
+
+def update_line_item_charges(db: Session, line_item_id: uuid.UUID, payload: LineItemChargeUpdateInput) -> BillSummaryRow:
+    """
+    Manual correction to a line item's raw charge figures for THIS bill
+    period ("Manage data bucket" in the UI) — used for cases where the
+    real billed amount needs a manual fix (e.g. a shared/General line's
+    genuine usage charge, or any other connection whose parsed figures
+    are wrong for this month). net_amount/total recompute automatically
+    on the next read, same as everything else in this module.
+    """
+    line_item = db.query(BillLineItem).filter(BillLineItem.id == line_item_id).first()
+    if not line_item:
+        raise HTTPException(status_code=404, detail="Bill line item not found")
+
+    line_item.total_usage_charges = payload.total_usage_charges
+    line_item.idd = payload.idd
+    line_item.roaming = payload.roaming
+    line_item.charges_for_bill_period = payload.charges_for_bill_period
+    line_item.vat = payload.vat
+    line_item.vas = payload.vas
+    line_item.add_to_bill_charges = payload.add_to_bill_charges
     db.commit()
     db.refresh(line_item)
     return get_summary_row_for_line_item(db, line_item_id)
