@@ -101,6 +101,7 @@ export default function BillsPage() {
 
   const sum = (key: keyof BillSummaryRow) => filteredRows.reduce((acc, r) => acc + Number(r[key] as string), 0);
   const totals = {
+    total_usage_charges: sum("total_usage_charges"),
     voice_rental: sum("voice_rental"),
     voice_usage: sum("voice_usage"),
     sms: sum("sms"),
@@ -121,13 +122,14 @@ export default function BillsPage() {
   function handleExport() {
     if (!selectedPeriod) return;
     const headers = [
-      "Mobile No", "EMP No", "Name", "Project",
+      "Mobile No", "EMP No", "Name", "Project", "Total Usage Charges",
       ...(hasBreakdown ? ["Voice Rental", "Voice Usage", "SMS", "Data Rental", "Data Usage"] : []),
       "IDD", "Roaming", "Charges for Bill Period", "VAT", "Net Amount", "Bucket Cost", "Total",
       "VAS", "Add To Bill Charges", "Salary Deduction", "Need Approval",
     ];
     const rows = filteredRows.map((row) => [
       row.mobile_no, row.emp_no ?? "", row.name ?? "Unmatched number", row.project_label ?? "",
+      Number(row.total_usage_charges),
       ...(hasBreakdown
         ? [
             row.voice_rental != null ? Number(row.voice_rental) : "",
@@ -142,7 +144,7 @@ export default function BillsPage() {
       Number(row.vas), Number(row.add_to_bill_charges), Number(row.salary_deduction), row.need_approval,
     ]);
     const totalsRow = [
-      "Total", "", "", "",
+      "Total", "", "", "", Number(totals.total_usage_charges.toFixed(2)),
       ...(hasBreakdown
         ? [
             Number(totals.voice_rental.toFixed(2)), Number(totals.voice_usage.toFixed(2)), Number(totals.sms.toFixed(2)),
@@ -209,6 +211,7 @@ export default function BillsPage() {
                 <th>EMP No</th>
                 <th>Name</th>
                 <th>Project</th>
+                <th>Total Usage Charges</th>
                 {hasBreakdown && (
                   <>
                     <th>Voice Rental</th>
@@ -234,14 +237,14 @@ export default function BillsPage() {
             <tbody>
               {loadingSummary && (
                 <tr>
-                  <td colSpan={hasBreakdown ? 20 : 15} className="empty-row">
+                  <td colSpan={hasBreakdown ? 21 : 16} className="empty-row">
                     Loading…
                   </td>
                 </tr>
               )}
               {!loadingSummary && filteredRows.length === 0 && (
                 <tr>
-                  <td colSpan={hasBreakdown ? 20 : 15} className="empty-row">
+                  <td colSpan={hasBreakdown ? 21 : 16} className="empty-row">
                     No rows match.
                   </td>
                 </tr>
@@ -259,6 +262,7 @@ export default function BillsPage() {
                         <span className="muted">—</span>
                       )}
                     </td>
+                    <td className="mono">{money(row.total_usage_charges)}</td>
                     {hasBreakdown && (
                       <>
                         <td className="mono">{row.voice_rental != null ? money(Number(row.voice_rental)) : "—"}</td>
@@ -305,6 +309,7 @@ export default function BillsPage() {
                   <td></td>
                   <td></td>
                   <td></td>
+                  <td className="mono">{money(totals.total_usage_charges)}</td>
                   {hasBreakdown && (
                     <>
                       <td className="mono">{money(totals.voice_rental)}</td>
