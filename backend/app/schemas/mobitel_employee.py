@@ -1,5 +1,6 @@
 import uuid
 from datetime import datetime
+from decimal import Decimal
 
 from pydantic import BaseModel
 
@@ -10,12 +11,17 @@ class MobitelConnectionOut(BaseModel):
     id: uuid.UUID
     mobile_no: str
     status: MobitelConnectionStatus
+    default_static_ip_cost: Decimal | None = None
 
     model_config = {"from_attributes": True}
 
 
 class MobitelConnectionCreate(BaseModel):
     mobile_no: str
+
+
+class MobitelConnectionDefaultStaticIpInput(BaseModel):
+    default_static_ip_cost: Decimal | None = None  # null clears it
 
 
 class MobitelEmployeeBase(BaseModel):

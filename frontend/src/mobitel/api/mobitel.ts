@@ -5,6 +5,7 @@ import type {
   MobitelBillPeriod,
   MobitelImportResult,
   MobitelBillLineItemOut,
+  MobitelConnection,
 } from "../types/mobitel";
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
@@ -53,6 +54,13 @@ export async function removeMobitelConnection(connectionId: string): Promise<voi
     const body = await res.json().catch(() => ({}));
     throw new Error(body.detail || `Delete failed (${res.status})`);
   }
+}
+
+export function setMobitelDefaultStaticIpCost(connectionId: string, cost: string | null): Promise<MobitelConnection> {
+  return request<MobitelConnection>(`/mobitel/employees/connections/${connectionId}/default-static-ip-cost`, {
+    method: "PUT",
+    body: JSON.stringify({ default_static_ip_cost: cost }),
+  });
 }
 
 // Bills

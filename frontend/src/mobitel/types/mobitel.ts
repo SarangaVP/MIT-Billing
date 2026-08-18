@@ -8,6 +8,7 @@ export interface MobitelConnection {
   id: string;
   mobile_no: string;
   status: MobitelConnectionStatus;
+  default_static_ip_cost: string | null;
 }
 
 export interface MobitelEmployee {

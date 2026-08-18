@@ -26,6 +26,16 @@ logger = logging.getLogger(__name__)
 MOBITEL_BUCKET_TOTAL_GB = Decimal("4000")
 MOBITEL_MB_PER_GB = Decimal("1000")
 
+# Connections with a known, permanently fixed static IP cost — applied
+# automatically on EVERY bill import, with no manual step required.
+# Confirmed real case: 711434957 always carries Rs. 1500 every month.
+# A connection's own default_static_ip_cost column (settable via the
+# Employees page) takes priority over this if it's ever set — this dict
+# is just the zero-effort baseline for known, unchanging cases.
+KNOWN_STATIC_IP_COSTS: dict[str, Decimal] = {
+    "711434957": Decimal("1500"),
+}
+
 
 def _detect_date_order(sample_date_str: str | None) -> str:
     """
@@ -236,11 +246,23 @@ def import_mobitel_bill(db: Session, pdf_path: str, label: str, portal_path: str
 
     total_auto_project_cost = sum(project_costs.values())
 
-    # Static IP cost is NOT a persistent rate anymore — every employee
-    # starts at 0 for a newly imported bill. It's set per-bill-period,
-    # per-employee, directly from the Bill Summary page (see
-    # update_static_ip_cost below), which also recalculates the split.
-    per_user_cost = ((net - total_auto_project_cost) / normal_users).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+    # Persistent per-connection static IP costs — applied automatically on
+    # every import, with no manual step required. A connection's own
+    # default_static_ip_cost (settable via the Employees page) takes
+    # priority if ever set; otherwise falls back to the hardcoded
+    # KNOWN_STATIC_IP_COSTS map for known, unchanging cases (e.g.
+    # 711434957 always carries Rs. 1500). Subtracted from the pool for
+    # ALL active connections, same as the manual _recalculate_period formula.
+    static_ip_by_connection: dict[uuid.UUID, Decimal] = {}
+    for c in active_connections:
+        cost = c.default_static_ip_cost or KNOWN_STATIC_IP_COSTS.get(c.mobile_no)
+        if cost:
+            static_ip_by_connection[c.id] = cost
+    total_default_static_ip = sum(static_ip_by_connection.values())
+
+    per_user_cost = (
+        (net - total_default_static_ip - total_auto_project_cost) / normal_users
+    ).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
 
     bill_period = MobitelBillPeriod(
         label=label,
@@ -266,6 +288,7 @@ def import_mobitel_bill(db: Session, pdf_path: str, label: str, portal_path: str
     for connection in active_connections:
         usage = portal_data.get(connection.mobile_no, {})
         auto_cost = project_costs.get(connection.id)
+        static_ip_cost = static_ip_by_connection.get(connection.id, Decimal("0"))
 
         if auto_cost is not None:
             data_cost = auto_cost
@@ -274,14 +297,15 @@ def import_mobitel_bill(db: Session, pdf_path: str, label: str, portal_path: str
             data_cost = per_user_cost.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
             is_project_cost = False
 
-        line_total += data_cost
+        total = (data_cost + static_ip_cost).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        line_total += total
 
         db.add(MobitelBillLineItem(
             bill_period_id=bill_period.id,
             connection_id=connection.id,
             data_cost=data_cost,
-            static_ip_cost=Decimal("0"),
-            total=data_cost,
+            static_ip_cost=static_ip_cost,
+            total=total,
             is_project_cost=is_project_cost,
             project_cost_amount=auto_cost,
             imsi_number=usage.get("imsi_number"),
