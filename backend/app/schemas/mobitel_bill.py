@@ -63,6 +63,7 @@ class MobitelBillLineItemOut(BaseModel):
     static_ip_cost: Decimal
     is_project_cost: bool = False
     project_cost_amount: Decimal | None = None
+    project_label: str | None = None
     total: Decimal
 
     # Only populated when a Portal sheet was uploaded alongside the PDF

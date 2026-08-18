@@ -30,4 +30,12 @@ class MobitelConnection(Base):
     status = Column(Enum(MobitelConnectionStatus), nullable=False, default=MobitelConnectionStatus.active)
     is_deleted = Column(Boolean, nullable=False, default=False)
 
+    # Some rows in the Master sheet encode a per-connection project
+    # allocation directly in the Name column (e.g. "SLA-IPTV Project"),
+    # same convention as Dialog Mobile's project_label on MobileNumber.
+    # When set AND a Portal file is uploaded with this month's bill,
+    # the connection's project cost is calculated automatically instead
+    # of the equal per-user split — see mobitel_bill_service.py.
+    project_label = Column(String, nullable=True)
+
     created_at = Column(DateTime(timezone=True), server_default=func.now())

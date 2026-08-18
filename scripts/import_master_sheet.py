@@ -66,6 +66,10 @@ def split_name_and_project_label(raw_name):
     """
     if raw_name is None:
         return None, None
+    if not isinstance(raw_name, str):
+        # A Name cell holding a stray number — treat it as a plain name
+        # with no project label rather than crashing on "-" in <non-string>.
+        raw_name = str(raw_name)
     if "-" not in raw_name:
         return raw_name.strip(), None
     base, _, label = raw_name.partition("-")

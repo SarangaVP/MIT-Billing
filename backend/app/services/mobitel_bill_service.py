@@ -18,6 +18,14 @@ from app.schemas.mobitel_bill import MobitelImportResult
 
 logger = logging.getLogger(__name__)
 
+# Auto project-cost formula: price per GB = (bucket Net) / MOBITEL_BUCKET_TOTAL_GB.
+# A project connection's cost = price_per_gb * its allocated Data Volume (Mb)
+# from the Portal sheet, converted to GB. Confirmed formula: 1 GB = 1000 Mb
+# (not 1024), and the bucket's total contracted size is a fixed 4000 GB
+# every month, not something that varies per bill.
+MOBITEL_BUCKET_TOTAL_GB = Decimal("4000")
+MOBITEL_MB_PER_GB = Decimal("1000")
+
 
 def _detect_date_order(sample_date_str: str | None) -> str:
     """
@@ -135,6 +143,22 @@ def _extract_bill_fields(pdf_path: str) -> tuple[dict, str]:
     return parse_mobitel_bill(pdf_path), "regex_fallback"
 
 
+def _calculate_auto_project_cost(net: Decimal, data_volume_mb) -> Decimal | None:
+    """
+    project cost = (Net / 4000) * (Data Volume Mb / 1000)
+    Returns None if data_volume_mb is missing/non-numeric — caller should
+    fall back to the normal equal split for that connection in that case.
+    """
+    if data_volume_mb is None:
+        return None
+    try:
+        gb = Decimal(str(data_volume_mb)) / MOBITEL_MB_PER_GB
+    except (ValueError, TypeError):
+        return None
+    price_per_gb = net / MOBITEL_BUCKET_TOTAL_GB
+    return (price_per_gb * gb).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+
 def import_mobitel_bill(db: Session, pdf_path: str, label: str, portal_path: str | None = None) -> MobitelImportResult:
     parsed, extraction_method = _extract_bill_fields(pdf_path)
     portal_data = parse_portal_sheet(portal_path) if portal_path else {}
@@ -189,11 +213,34 @@ def import_mobitel_bill(db: Session, pdf_path: str, label: str, portal_path: str
     if users == 0:
         raise HTTPException(status_code=422, detail="No active Mobitel connections to split this bill across")
 
+    # Auto-detect project connections: a connection whose Master sheet Name
+    # had a "-" label (project_label set) AND whose Portal-sheet Data
+    # Volume is available this month gets its cost calculated from the
+    # formula instead of the equal split — same exclude-from-pool-and-
+    # headcount treatment as a manually-set project cost.
+    project_costs: dict[uuid.UUID, Decimal] = {}
+    for connection in active_connections:
+        if not connection.project_label:
+            continue
+        usage = portal_data.get(connection.mobile_no)
+        if not usage:
+            continue
+        auto_cost = _calculate_auto_project_cost(net, usage.get("data_volume_mb"))
+        if auto_cost is not None:
+            project_costs[connection.id] = auto_cost
+
+    normal_connections = [c for c in active_connections if c.id not in project_costs]
+    normal_users = len(normal_connections)
+    if normal_users == 0:
+        raise HTTPException(status_code=422, detail="Every active connection this month auto-calculated as a project cost — nothing left to split")
+
+    total_auto_project_cost = sum(project_costs.values())
+
     # Static IP cost is NOT a persistent rate anymore — every employee
     # starts at 0 for a newly imported bill. It's set per-bill-period,
     # per-employee, directly from the Bill Summary page (see
     # update_static_ip_cost below), which also recalculates the split.
-    per_user_cost = (net / users).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+    per_user_cost = ((net - total_auto_project_cost) / normal_users).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
 
     bill_period = MobitelBillPeriod(
         label=label,
@@ -217,10 +264,17 @@ def import_mobitel_bill(db: Session, pdf_path: str, label: str, portal_path: str
 
     line_total = Decimal("0")
     for connection in active_connections:
-        data_cost = per_user_cost.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
-        line_total += data_cost
-
         usage = portal_data.get(connection.mobile_no, {})
+        auto_cost = project_costs.get(connection.id)
+
+        if auto_cost is not None:
+            data_cost = auto_cost
+            is_project_cost = True
+        else:
+            data_cost = per_user_cost.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+            is_project_cost = False
+
+        line_total += data_cost
 
         db.add(MobitelBillLineItem(
             bill_period_id=bill_period.id,
@@ -228,6 +282,8 @@ def import_mobitel_bill(db: Session, pdf_path: str, label: str, portal_path: str
             data_cost=data_cost,
             static_ip_cost=Decimal("0"),
             total=data_cost,
+            is_project_cost=is_project_cost,
+            project_cost_amount=auto_cost,
             imsi_number=usage.get("imsi_number"),
             data_volume_mb=usage.get("data_volume_mb"),
             available_data_volume_mb=usage.get("available_data_volume_mb"),
@@ -303,6 +359,7 @@ def get_summary(db: Session, bill_period_id: uuid.UUID) -> list[dict]:
             "static_ip_cost": li.static_ip_cost,
             "is_project_cost": li.is_project_cost,
             "project_cost_amount": li.project_cost_amount,
+            "project_label": conn.project_label,
             "total": li.total,
             "imsi_number": li.imsi_number,
             "data_volume_mb": li.data_volume_mb,

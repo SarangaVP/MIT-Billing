@@ -117,14 +117,14 @@ export default function MobitelBillsPage() {
   function handleExport() {
     if (!selectedPeriod) return;
     const headers = [
-      "EMP No", "Name", "Mobile No", "LOB", "LOB Code",
+      "EMP No", "Name", "Project", "Mobile No", "LOB", "LOB Code",
       ...(hasUsageData
         ? ["IMSI", "Data Allocated (Mb)", "Data Available (Mb)", "Data Utilized (Mb)", "Daily Limit (Mb)", "Member Status"]
         : []),
       "Data Cost", "Project Cost", "Static IP Cost", "Total",
     ];
     const rows = filteredRows.map((row) => [
-      row.emp_no ?? "", row.name ?? "", row.mobile_no ?? "", row.lob ?? "", row.lob_code ?? "",
+      row.emp_no ?? "", row.name ?? "", row.project_label ?? "", row.mobile_no ?? "", row.lob ?? "", row.lob_code ?? "",
       ...(hasUsageData
         ? [
             row.imsi_number ?? "",
@@ -139,7 +139,7 @@ export default function MobitelBillsPage() {
       Number(row.static_ip_cost), Number(row.total),
     ]);
     const totalsRow = [
-      "Total", "", "", "", "",
+      "Total", "", "", "", "", "",
       ...(hasUsageData ? ["", "", "", "", "", ""] : []),
       Number(filteredRows.reduce((s, r) => s + Number(r.data_cost), 0).toFixed(2)),
       "",
@@ -321,7 +321,10 @@ export default function MobitelBillsPage() {
                 filteredRows.map((row) => (
                   <tr key={row.id}>
                     <td className="mono">{row.emp_no}</td>
-                    <td>{row.name}</td>
+                    <td>
+                      {row.name}
+                      {row.project_label && <span className="pill pill-transferred" style={{ marginLeft: 6 }}>{row.project_label}</span>}
+                    </td>
                     <td className="mono">{row.mobile_no}</td>
                     <td>{row.lob || <span className="muted">—</span>}</td>
                     <td className="mono">{row.lob_code || <span className="muted">—</span>}</td>

@@ -40,6 +40,27 @@ def to_str(value) -> str | None:
     return str(int(cleaned)) if isinstance(cleaned, float) else str(cleaned)
 
 
+def split_name_and_project_label(raw_name):
+    """
+    Some rows encode a per-connection project allocation directly in the
+    Name column (e.g. "SLA-IPTV Project"), same convention as Dialog
+    Mobile's project_label handling. Keeps the employee's own name clean
+    and consistent, while preserving the per-connection project label as
+    its own field on MobitelConnection.
+    """
+    if raw_name is None:
+        return None, None
+    if not isinstance(raw_name, str):
+        # A Name cell holding a stray number (e.g. an accidental numeric
+        # value or a formula artifact) — treat it as a plain name with no
+        # project label rather than crashing on "-" in <non-string>.
+        raw_name = str(raw_name)
+    if "-" not in raw_name:
+        return raw_name.strip(), None
+    base, _, label = raw_name.partition("-")
+    return base.strip(), label.strip() or None
+
+
 def _build_column_map(header_row) -> dict[str, int]:
     col_map = {}
     for idx, cell in enumerate(header_row):
@@ -102,8 +123,10 @@ def sync_mobitel_sheet(db: Session, xlsx_path: str) -> dict:
             pool_rows.append((mobile_no_str, f"POOL-{mobile_no_str}"))
             continue
 
-        emp_no_str, name_clean = to_str(emp_no), clean(name)
-        if not mobile_no_str or not emp_no_str or not name_clean:
+        emp_no_str = to_str(emp_no)
+        raw_name = clean(name)
+        base_name, project_label = split_name_and_project_label(raw_name)
+        if not mobile_no_str or not emp_no_str or not base_name:
             skipped_missing += 1
             continue
 
@@ -114,8 +137,14 @@ def sync_mobitel_sheet(db: Session, xlsx_path: str) -> dict:
             team_name = clean(row[lob_idx]) if lob_idx is not None and lob_idx < len(row) else None
             lob_code = None
 
-        grouped.setdefault(emp_no_str, {"name": name_clean, "team": team_name, "lob_code": lob_code, "mobiles": []})
-        grouped[emp_no_str]["mobiles"].append(mobile_no_str)
+        grouped.setdefault(emp_no_str, {"name": base_name, "team": team_name, "lob_code": lob_code, "mobiles": []})
+        # Prefer a row with NO project label for the employee's own name —
+        # same reasoning as Dialog Mobile: a project-labeled row's base
+        # name is usually identical, but this guards against any stray
+        # difference in casing/whitespace across that employee's rows.
+        if project_label is None:
+            grouped[emp_no_str]["name"] = base_name
+        grouped[emp_no_str]["mobiles"].append((mobile_no_str, project_label))
 
     emp_nos_in_upload = set(grouped.keys()) | {syn for _, syn in pool_rows}
     inserted, updated, revived, retired_employees = 0, 0, 0, 0
@@ -147,18 +176,23 @@ def sync_mobitel_sheet(db: Session, xlsx_path: str) -> dict:
                 updated += 1
 
         current_mobiles = {c.mobile_no: c for c in db.query(MobitelConnection).filter(MobitelConnection.employee_id == employee.id).all()}
-        new_mobiles = set(data["mobiles"])
+        new_mobiles = {mobile_no: label for mobile_no, label in data["mobiles"]}
 
-        for mobile_no in new_mobiles:
+        for mobile_no, project_label in new_mobiles.items():
             conn = connection_by_mobile.get(mobile_no)
             if conn is None:
-                db.add(MobitelConnection(employee_id=employee.id, mobile_no=mobile_no, status=MobitelConnectionStatus.active))
+                db.add(MobitelConnection(
+                    employee_id=employee.id, mobile_no=mobile_no,
+                    status=MobitelConnectionStatus.active, project_label=project_label,
+                ))
                 connections_added += 1
             elif conn.employee_id != employee.id:
                 conflicts.append(f"{mobile_no}: claimed by a different employee than EMP {emp_no}")
-            elif conn.status != MobitelConnectionStatus.active:
-                conn.status = MobitelConnectionStatus.active
-                connections_reactivated += 1
+            else:
+                if conn.status != MobitelConnectionStatus.active:
+                    conn.status = MobitelConnectionStatus.active
+                    connections_reactivated += 1
+                conn.project_label = project_label
 
         for mobile_no, conn in current_mobiles.items():
             if mobile_no not in new_mobiles and conn.status == MobitelConnectionStatus.active:
