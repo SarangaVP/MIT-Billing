@@ -1,10 +1,10 @@
 import { useState, type FormEvent } from "react";
-import type { Employee, EmployeeCreateInput, EmployeeUpdateInput } from "../types/employee";
-import { addMobileNumber, removeMobileNumber, updateMobileNumberProjectLabel } from "../api/employees";
+import type { DialogMobileEmployee, DialogMobileEmployeeCreateInput, DialogMobileEmployeeUpdateInput } from "../types/dialogMobile";
+import { addDialogMobileMobileNumber, removeDialogMobileMobileNumber, updateDialogMobileMobileNumberProjectLabel } from "../api/dialogMobile";
 
 interface Props {
-  employee: Employee | null; // null = creating a new employee
-  onSave: (payload: EmployeeCreateInput | EmployeeUpdateInput) => Promise<void>;
+  employee: DialogMobileEmployee | null; // null = creating a new employee
+  onSave: (payload: DialogMobileEmployeeCreateInput | DialogMobileEmployeeUpdateInput) => Promise<void>;
   onNumbersChanged: () => void; // called after an inline add/remove, so the parent refetches
   onCancel: () => void;
 }
@@ -33,7 +33,7 @@ const EMPTY: FormState = {
   resignation: "No",
 };
 
-export default function EmployeeFormPanel({ employee, onSave, onNumbersChanged, onCancel }: Props) {
+export default function DialogMobileEmployeeFormPanel({ employee, onSave, onNumbersChanged, onCancel }: Props) {
   const isEdit = employee !== null;
   const [form, setForm] = useState<FormState>(
     employee
@@ -82,9 +82,9 @@ export default function EmployeeFormPanel({ employee, onSave, onNumbersChanged, 
       };
 
       if (isEdit) {
-        await onSave(shared as EmployeeUpdateInput);
+        await onSave(shared as DialogMobileEmployeeUpdateInput);
       } else {
-        await onSave({ ...shared, mobile_no: form.mobile_no || null } as EmployeeCreateInput);
+        await onSave({ ...shared, mobile_no: form.mobile_no || null } as DialogMobileEmployeeCreateInput);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
@@ -98,7 +98,7 @@ export default function EmployeeFormPanel({ employee, onSave, onNumbersChanged, 
     setNumberError(null);
     setNumberBusy(true);
     try {
-      await addMobileNumber(employee.id, { mobile_no: newNumber.trim() });
+      await addDialogMobileMobileNumber(employee.id, { mobile_no: newNumber.trim() });
       setNewNumber("");
       onNumbersChanged();
     } catch (err) {
@@ -114,7 +114,7 @@ export default function EmployeeFormPanel({ employee, onSave, onNumbersChanged, 
     setNumberError(null);
     setNumberBusy(true);
     try {
-      await removeMobileNumber(employee.id, numberId);
+      await removeDialogMobileMobileNumber(employee.id, numberId);
       onNumbersChanged();
     } catch (err) {
       setNumberError(err instanceof Error ? err.message : "Could not remove number");
@@ -126,7 +126,7 @@ export default function EmployeeFormPanel({ employee, onSave, onNumbersChanged, 
   async function handleSaveLabel(numberId: string) {
     setNumberError(null);
     try {
-      await updateMobileNumberProjectLabel(numberId, labelInput.trim() || null);
+      await updateDialogMobileMobileNumberProjectLabel(numberId, labelInput.trim() || null);
       setEditingLabelFor(null);
       onNumbersChanged();
     } catch (err) {

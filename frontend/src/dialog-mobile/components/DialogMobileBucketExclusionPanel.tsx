@@ -1,14 +1,14 @@
 import { useState, type FormEvent } from "react";
-import type { BillSummaryRow } from "../types/bill";
-import ConfirmPanel from "./ConfirmPanel";
+import type { DialogMobileBillSummaryRow } from "../types/dialogMobile";
+import DialogMobileConfirmPanel from "./DialogMobileConfirmPanel";
 
 interface Props {
-  rows: BillSummaryRow[];
+  rows: DialogMobileBillSummaryRow[];
   onSave: (lineItemId: string, isBucketExcluded: boolean) => Promise<void>;
   onCancel: () => void;
 }
 
-export default function BucketExclusionPanel({ rows, onSave, onCancel }: Props) {
+export default function DialogMobileBucketExclusionPanel({ rows, onSave, onCancel }: Props) {
   const currentlyExcluded = rows.filter((r) => r.is_bucket_excluded);
 
   const [selectedId, setSelectedId] = useState("");
@@ -16,7 +16,7 @@ export default function BucketExclusionPanel({ rows, onSave, onCancel }: Props) 
   const [showResults, setShowResults] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [removingRow, setRemovingRow] = useState<BillSummaryRow | null>(null);
+  const [removingRow, setRemovingRow] = useState<DialogMobileBillSummaryRow | null>(null);
 
   const selectedRow = rows.find((r) => r.bill_line_item_id === selectedId) || null;
 
@@ -31,7 +31,7 @@ export default function BucketExclusionPanel({ rows, onSave, onCancel }: Props) 
       )
     : rows;
 
-  function handlePickRow(row: BillSummaryRow) {
+  function handlePickRow(row: DialogMobileBillSummaryRow) {
     setSelectedId(row.bill_line_item_id);
     setSearch(`${row.name} (${row.emp_no})`);
     setShowResults(false);
@@ -159,7 +159,7 @@ export default function BucketExclusionPanel({ rows, onSave, onCancel }: Props) 
       </form>
 
       {removingRow && (
-        <ConfirmPanel
+        <DialogMobileConfirmPanel
           title="Remove bucket exclusion?"
           message={`This puts ${removingRow.name} back into the standard bucket allocation for this bill period.`}
           confirmLabel="Remove"

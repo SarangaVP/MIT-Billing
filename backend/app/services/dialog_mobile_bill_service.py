@@ -13,11 +13,14 @@ from app.ingestion.xls_summary_parser import (
     parse_summary_table as parse_xls_summary_table,
     extract_cover_page_totals as extract_xls_cover_totals,
 )
-from app.models.bill_period import BillPeriod
-from app.models.bill_line_item import BillLineItem
-from app.models.mobile_number import MobileNumber
-from app.models.employee import Employee
-from app.schemas.bill import BillSummaryRow, ImportResult, ApprovalOverrideInput, LineItemChargeUpdateInput
+from app.models.dialog_mobile_bill_period import DialogMobileBillPeriod
+from app.models.dialog_mobile_bill_line_item import DialogMobileBillLineItem
+from app.models.dialog_mobile_mobile_number import DialogMobileMobileNumber
+from app.models.dialog_mobile_employee import DialogMobileEmployee
+from app.schemas.dialog_mobile_bill import (
+    DialogMobileBillSummaryRow, DialogMobileImportResult, DialogMobileApprovalOverrideInput,
+    DialogMobileLineItemChargeUpdateInput,
+)
 
 
 def _parse_date(value: str | None, fmt: str) -> date | None:
@@ -26,7 +29,7 @@ def _parse_date(value: str | None, fmt: str) -> date | None:
     return datetime.strptime(value, fmt).date()
 
 
-def import_bill_file(db: Session, file_path: str, label: str, source_format: str) -> ImportResult:
+def import_bill_file(db: Session, file_path: str, label: str, source_format: str) -> DialogMobileImportResult:
     """
     source_format: "pdf" or "xls". Both produce the same downstream shape —
     everything after parsing is format-agnostic.
@@ -72,7 +75,7 @@ def import_bill_file(db: Session, file_path: str, label: str, source_format: str
         # a human can review it rather than being locked out of the import.
         reconciled = stated_total is not None and abs(discrepancy) < Decimal("0.01")
 
-    bill_period = BillPeriod(
+    bill_period = DialogMobileBillPeriod(
         label=label,
         corporate_code=cover.get("corporate_code"),
         bill_period_start=_parse_date(cover.get("bill_period_start"), date_fmt),
@@ -92,7 +95,7 @@ def import_bill_file(db: Session, file_path: str, label: str, source_format: str
     db.flush()
 
     for row in rows:
-        db.add(BillLineItem(
+        db.add(DialogMobileBillLineItem(
             bill_period_id=bill_period.id,
             mobile_no=row["mobile_no"],
             previous_due_amount=row.get("previous_due_amount", 0),
@@ -122,7 +125,7 @@ def import_bill_file(db: Session, file_path: str, label: str, source_format: str
     db.commit()
     db.refresh(bill_period)
 
-    return ImportResult(
+    return DialogMobileImportResult(
         bill_period_id=bill_period.id,
         line_items_imported=len(rows),
         parsed_total_charges_for_bill_period=parsed_total,
@@ -133,8 +136,8 @@ def import_bill_file(db: Session, file_path: str, label: str, source_format: str
     )
 
 
-def get_bill_period(db: Session, bill_period_id: uuid.UUID) -> BillPeriod:
-    period = db.query(BillPeriod).filter(BillPeriod.id == bill_period_id).first()
+def get_bill_period(db: Session, bill_period_id: uuid.UUID) -> DialogMobileBillPeriod:
+    period = db.query(DialogMobileBillPeriod).filter(DialogMobileBillPeriod.id == bill_period_id).first()
     if not period:
         raise HTTPException(status_code=404, detail="Bill period not found")
     return period
@@ -142,23 +145,23 @@ def get_bill_period(db: Session, bill_period_id: uuid.UUID) -> BillPeriod:
 
 def delete_bill_period(db: Session, bill_period_id: uuid.UUID) -> None:
     period = get_bill_period(db, bill_period_id)  # 404 if missing
-    db.query(BillLineItem).filter(BillLineItem.bill_period_id == period.id).delete()
+    db.query(DialogMobileBillLineItem).filter(DialogMobileBillLineItem.bill_period_id == period.id).delete()
     db.delete(period)
     db.commit()
 
 
-def list_bill_periods(db: Session) -> list[BillPeriod]:
-    return db.query(BillPeriod).order_by(BillPeriod.bill_period_start.desc().nullslast()).all()
+def list_bill_periods(db: Session) -> list[DialogMobileBillPeriod]:
+    return db.query(DialogMobileBillPeriod).order_by(DialogMobileBillPeriod.bill_period_start.desc().nullslast()).all()
 
 
-def get_summary(db: Session, bill_period_id: uuid.UUID) -> list[BillSummaryRow]:
+def get_summary(db: Session, bill_period_id: uuid.UUID) -> list[DialogMobileBillSummaryRow]:
     period = get_bill_period(db, bill_period_id)
-    line_items = db.query(BillLineItem).filter(BillLineItem.bill_period_id == period.id).all()
+    line_items = db.query(DialogMobileBillLineItem).filter(DialogMobileBillLineItem.bill_period_id == period.id).all()
     return _build_summary_rows(db, line_items, bill_period=period)
 
 
-def get_summary_row_for_line_item(db: Session, line_item_id: uuid.UUID) -> BillSummaryRow:
-    line_item = db.query(BillLineItem).filter(BillLineItem.id == line_item_id).first()
+def get_summary_row_for_line_item(db: Session, line_item_id: uuid.UUID) -> DialogMobileBillSummaryRow:
+    line_item = db.query(DialogMobileBillLineItem).filter(DialogMobileBillLineItem.id == line_item_id).first()
     if not line_item:
         raise HTTPException(status_code=404, detail="Bill line item not found")
     period = get_bill_period(db, line_item.bill_period_id)
@@ -166,7 +169,7 @@ def get_summary_row_for_line_item(db: Session, line_item_id: uuid.UUID) -> BillS
     return rows[0]
 
 
-def _build_summary_rows(db: Session, line_items: list[BillLineItem], bill_period: BillPeriod) -> list[BillSummaryRow]:
+def _build_summary_rows(db: Session, line_items: list[DialogMobileBillLineItem], bill_period: DialogMobileBillPeriod) -> list[DialogMobileBillSummaryRow]:
     # There is no standard/fallback bucket rate anymore — every bill period
     # requires an explicit "Set bucket rate" override (set via the Bills
     # page for that specific month). Until someone sets one, the bucket
@@ -176,15 +179,15 @@ def _build_summary_rows(db: Session, line_items: list[BillLineItem], bill_period
 
     mobile_nos = [li.mobile_no for li in line_items]
     number_rows = (
-        db.query(MobileNumber, Employee)
-        .join(Employee, Employee.id == MobileNumber.employee_id)
-        .filter(MobileNumber.mobile_no.in_(mobile_nos))
+        db.query(DialogMobileMobileNumber, DialogMobileEmployee)
+        .join(DialogMobileEmployee, DialogMobileEmployee.id == DialogMobileMobileNumber.employee_id)
+        .filter(DialogMobileMobileNumber.mobile_no.in_(mobile_nos))
         .all()
     )
     employee_by_mobile = {mn.mobile_no: emp for mn, emp in number_rows}
-    # project_label lives on MobileNumber, not Employee — the dict above
-    # only kept the Employee half of the join, so this was previously
-    # discarded entirely and had no way to reach the summary row.
+    # project_label lives on DialogMobileMobileNumber, not DialogMobileEmployee
+    # — the dict above only kept the Employee half of the join, so this was
+    # previously discarded entirely and had no way to reach the summary row.
     project_label_by_mobile = {mn.mobile_no: mn.project_label for mn, emp in number_rows}
 
     results = []
@@ -241,7 +244,7 @@ def _build_summary_rows(db: Session, line_items: list[BillLineItem], bill_period
             need_approval = "OK" if net_amount <= credit_limit else "Need Approval"
             is_overridden = False
 
-        results.append(BillSummaryRow(
+        results.append(DialogMobileBillSummaryRow(
             bill_line_item_id=li.id,
             mobile_no=li.mobile_no,
             emp_no=employee.emp_no if employee else None,
@@ -279,8 +282,8 @@ def _build_summary_rows(db: Session, line_items: list[BillLineItem], bill_period
     return results
 
 
-def set_approval_override(db: Session, line_item_id: uuid.UUID, payload: ApprovalOverrideInput) -> BillSummaryRow:
-    line_item = db.query(BillLineItem).filter(BillLineItem.id == line_item_id).first()
+def set_approval_override(db: Session, line_item_id: uuid.UUID, payload: DialogMobileApprovalOverrideInput) -> DialogMobileBillSummaryRow:
+    line_item = db.query(DialogMobileBillLineItem).filter(DialogMobileBillLineItem.id == line_item_id).first()
     if not line_item:
         raise HTTPException(status_code=404, detail="Bill line item not found")
 
@@ -290,7 +293,7 @@ def set_approval_override(db: Session, line_item_id: uuid.UUID, payload: Approva
     return get_summary_row_for_line_item(db, line_item_id)
 
 
-def update_line_item_charges(db: Session, line_item_id: uuid.UUID, payload: LineItemChargeUpdateInput) -> BillSummaryRow:
+def update_line_item_charges(db: Session, line_item_id: uuid.UUID, payload: DialogMobileLineItemChargeUpdateInput) -> DialogMobileBillSummaryRow:
     """
     Manual correction to a line item's raw charge figures for THIS bill
     period ("Manage data bucket" in the UI) — used for cases where the
@@ -299,7 +302,7 @@ def update_line_item_charges(db: Session, line_item_id: uuid.UUID, payload: Line
     are wrong for this month). net_amount/total recompute automatically
     on the next read, same as everything else in this module.
     """
-    line_item = db.query(BillLineItem).filter(BillLineItem.id == line_item_id).first()
+    line_item = db.query(DialogMobileBillLineItem).filter(DialogMobileBillLineItem.id == line_item_id).first()
     if not line_item:
         raise HTTPException(status_code=404, detail="Bill line item not found")
 
@@ -315,7 +318,7 @@ def update_line_item_charges(db: Session, line_item_id: uuid.UUID, payload: Line
     return get_summary_row_for_line_item(db, line_item_id)
 
 
-def set_bucket_rate_override(db: Session, bill_period_id: uuid.UUID, cost: Decimal | None, vat: Decimal | None) -> list[BillSummaryRow]:
+def set_bucket_rate_override(db: Session, bill_period_id: uuid.UUID, cost: Decimal | None, vat: Decimal | None) -> list[DialogMobileBillSummaryRow]:
     """
     Sets (or clears, if both are None) a bucket rate override for THIS
     bill period only — unlike the standard rate table, this never affects
@@ -330,17 +333,17 @@ def set_bucket_rate_override(db: Session, bill_period_id: uuid.UUID, cost: Decim
     return get_summary(db, bill_period_id)
 
 
-def set_bucket_exclusion(db: Session, line_item_id: uuid.UUID, is_bucket_excluded: bool) -> BillSummaryRow:
+def set_bucket_exclusion(db: Session, line_item_id: uuid.UUID, is_bucket_excluded: bool) -> DialogMobileBillSummaryRow:
     """
     Marks/unmarks one connection as excluded from the bucket allocation
     for THIS bill period specifically — a deliberate per-month decision,
-    typically used for "General" lines (see Employee.is_general_line).
+    typically used for "General" lines (see DialogMobileEmployee.is_general_line).
     Unlike Mobitel's project cost, this doesn't touch anyone else's
     numbers: the bucket rate here isn't a shared pool split across
     everyone, it's a flat per-connection allocation, so zeroing one
     row's bucket_cost/bucket_vat has zero effect on any other row.
     """
-    line_item = db.query(BillLineItem).filter(BillLineItem.id == line_item_id).first()
+    line_item = db.query(DialogMobileBillLineItem).filter(DialogMobileBillLineItem.id == line_item_id).first()
     if not line_item:
         raise HTTPException(status_code=404, detail="Bill line item not found")
 

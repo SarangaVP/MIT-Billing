@@ -6,7 +6,7 @@ interface Props {
   onCancel: () => void;
 }
 
-export default function ConfirmPanel({ title, message, confirmLabel = "Delete", onConfirm, onCancel }: Props) {
+export default function DialogMobileConfirmPanel({ title, message, confirmLabel = "Delete", onConfirm, onCancel }: Props) {
   return (
     <div className="panel-overlay" onClick={onCancel}>
       <div className="panel panel-small" onClick={(e) => e.stopPropagation()}>

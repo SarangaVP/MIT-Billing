@@ -1,9 +1,9 @@
 import { useState, type FormEvent } from "react";
-import type { BillSummaryRow, LineItemChargeUpdateInput } from "../types/bill";
+import type { DialogMobileBillSummaryRow, DialogMobileLineItemChargeUpdateInput } from "../types/dialogMobile";
 
 interface Props {
-  rows: BillSummaryRow[];
-  onSave: (lineItemId: string, payload: LineItemChargeUpdateInput) => Promise<void>;
+  rows: DialogMobileBillSummaryRow[];
+  onSave: (lineItemId: string, payload: DialogMobileLineItemChargeUpdateInput) => Promise<void>;
   onCancel: () => void;
 }
 
@@ -17,7 +17,7 @@ const emptyForm = {
   add_to_bill_charges: "",
 };
 
-export default function ManageDataBucketPanel({ rows, onSave, onCancel }: Props) {
+export default function DialogMobileManageDataBucketPanel({ rows, onSave, onCancel }: Props) {
   const [selectedId, setSelectedId] = useState("");
   const [search, setSearch] = useState("");
   const [showResults, setShowResults] = useState(false);
@@ -38,7 +38,7 @@ export default function ManageDataBucketPanel({ rows, onSave, onCancel }: Props)
       )
     : rows;
 
-  function handlePickRow(row: BillSummaryRow) {
+  function handlePickRow(row: DialogMobileBillSummaryRow) {
     setSelectedId(row.bill_line_item_id);
     setSearch(`${row.name} (${row.emp_no})`);
     setShowResults(false);

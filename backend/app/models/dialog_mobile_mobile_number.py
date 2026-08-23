@@ -7,20 +7,20 @@ from app.database import Base
 from app.types import GUID
 
 
-class MobileNumberStatus(str, enum.Enum):
+class DialogMobileMobileNumberStatus(str, enum.Enum):
     active = "active"
     inactive = "inactive"   # no longer in use by anyone (e.g. cancelled)
 
 
-class MobileNumber(Base):
+class DialogMobileMobileNumber(Base):
     """
     A mobile number belongs to exactly one employee at a time, but an
     employee can hold more than one number (confirmed by real data: some
     employees are billed on two numbers under the same EMP No, e.g. a
     primary line plus a project/device line).
 
-    A transfer moves a MobileNumber row's employee_id to a different
-    employee — the number itself is never duplicated or deleted.
+    A transfer moves a DialogMobileMobileNumber row's employee_id to a
+    different employee — the number itself is never duplicated or deleted.
     """
 
     __tablename__ = "dialog_mobile_mobile_numbers"
@@ -30,7 +30,7 @@ class MobileNumber(Base):
 
     mobile_no = Column(String, nullable=False, index=True)
     is_primary = Column(Boolean, nullable=False, default=False)
-    status = Column(Enum(MobileNumberStatus), nullable=False, default=MobileNumberStatus.active)
+    status = Column(Enum(DialogMobileMobileNumberStatus), nullable=False, default=DialogMobileMobileNumberStatus.active)
 
     # Some of an employee's numbers are cost-allocated to a specific
     # project (confirmed real cases: "Panitha Bimsara-IPTV Project",

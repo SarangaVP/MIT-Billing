@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import EmployeesPage from "./pages/EmployeesPage";
-import BillsPage from "./pages/BillsPage";
+import DialogMobileEmployeesPage from "./dialog-mobile/pages/DialogMobileEmployeesPage";
+import DialogMobileBillsPage from "./dialog-mobile/pages/DialogMobileBillsPage";
 import MobitelEmployeesPage from "./mobitel/pages/MobitelEmployeesPage";
 import MobitelBillsPage from "./mobitel/pages/MobitelBillsPage";
 import DialogDataEmployeesPage from "./dialog-data/pages/DialogDataEmployeesPage";
@@ -144,8 +144,8 @@ export default function App() {
       )}
 
       <main className="content">
-        {module === "dialog_mobile" && dialogTab === "employees" && <EmployeesPage />}
-        {module === "dialog_mobile" && dialogTab === "bills" && <BillsPage />}
+        {module === "dialog_mobile" && dialogTab === "employees" && <DialogMobileEmployeesPage />}
+        {module === "dialog_mobile" && dialogTab === "bills" && <DialogMobileBillsPage />}
 
         {module === "mobitel_data_bucket" && mobitelTab === "employees" && <MobitelEmployeesPage />}
         {module === "mobitel_data_bucket" && mobitelTab === "bills" && <MobitelBillsPage />}

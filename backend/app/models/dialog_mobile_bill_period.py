@@ -6,7 +6,7 @@ from app.database import Base
 from app.types import GUID
 
 
-class BillPeriod(Base):
+class DialogMobileBillPeriod(Base):
     """One imported monthly bill (one file import = one row here)."""
 
     __tablename__ = "dialog_mobile_bill_periods"

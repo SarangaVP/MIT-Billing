@@ -1,22 +1,22 @@
 import { useEffect, useState, useCallback } from "react";
-import type { BillPeriod, BillSummaryRow, LineItemChargeUpdateInput } from "../types/bill";
-import { listBillPeriods, getBillSummary, setApprovalOverride, setBucketExclusion, setBucketRateOverride, setLineItemCharges, deleteBillPeriod } from "../api/bills";
-import BillUploadPanel from "../components/BillUploadPanel";
-import BucketExclusionPanel from "../components/BucketExclusionPanel";
-import BucketRatePanel from "../components/BucketRatePanel";
-import ManageDataBucketPanel from "../components/ManageDataBucketPanel";
-import ConfirmPanel from "../components/ConfirmPanel";
-import { exportTableToExcel } from "../utils/exportTable";
+import type { DialogMobileBillPeriod, DialogMobileBillSummaryRow, DialogMobileLineItemChargeUpdateInput } from "../types/dialogMobile";
+import { listDialogMobileBillPeriods, getDialogMobileBillSummary, setDialogMobileApprovalOverride, setDialogMobileBucketExclusion, setDialogMobileBucketRateOverride, setDialogMobileLineItemCharges, deleteDialogMobileBillPeriod } from "../api/dialogMobile";
+import DialogMobileBillUploadPanel from "../components/DialogMobileBillUploadPanel";
+import DialogMobileBucketExclusionPanel from "../components/DialogMobileBucketExclusionPanel";
+import DialogMobileBucketRatePanel from "../components/DialogMobileBucketRatePanel";
+import DialogMobileManageDataBucketPanel from "../components/DialogMobileManageDataBucketPanel";
+import DialogMobileConfirmPanel from "../components/DialogMobileConfirmPanel";
+import { exportTableToExcel } from "../../utils/exportTable";
 
-export default function BillsPage() {
-  const [periods, setPeriods] = useState<BillPeriod[]>([]);
+export default function DialogMobileBillsPage() {
+  const [periods, setPeriods] = useState<DialogMobileBillPeriod[]>([]);
   const [loadingPeriods, setLoadingPeriods] = useState(true);
-  const [selectedPeriod, setSelectedPeriod] = useState<BillPeriod | null>(null);
-  const [summaryRows, setSummaryRows] = useState<BillSummaryRow[]>([]);
+  const [selectedPeriod, setSelectedPeriod] = useState<DialogMobileBillPeriod | null>(null);
+  const [summaryRows, setSummaryRows] = useState<DialogMobileBillSummaryRow[]>([]);
   const [loadingSummary, setLoadingSummary] = useState(false);
   const [showUpload, setShowUpload] = useState(false);
   const [search, setSearch] = useState("");
-  const [deletingPeriod, setDeletingPeriod] = useState<BillPeriod | null>(null);
+  const [deletingPeriod, setDeletingPeriod] = useState<DialogMobileBillPeriod | null>(null);
   const [showBucketExclusionPanel, setShowBucketExclusionPanel] = useState(false);
   const [showBucketRatePanel, setShowBucketRatePanel] = useState(false);
   const [showManageDataBucketPanel, setShowManageDataBucketPanel] = useState(false);
@@ -24,7 +24,7 @@ export default function BillsPage() {
   const loadPeriods = useCallback(async () => {
     setLoadingPeriods(true);
     try {
-      setPeriods(await listBillPeriods());
+      setPeriods(await listDialogMobileBillPeriods());
     } finally {
       setLoadingPeriods(false);
     }
@@ -34,28 +34,28 @@ export default function BillsPage() {
     loadPeriods();
   }, [loadPeriods]);
 
-  async function openPeriod(period: BillPeriod) {
+  async function openPeriod(period: DialogMobileBillPeriod) {
     setSelectedPeriod(period);
     setLoadingSummary(true);
     try {
-      setSummaryRows(await getBillSummary(period.id));
+      setSummaryRows(await getDialogMobileBillSummary(period.id));
     } finally {
       setLoadingSummary(false);
     }
   }
 
-  async function handleApprovalChange(row: BillSummaryRow, value: string) {
-    const updated = await setApprovalOverride(row.bill_line_item_id, { approval_override: value });
+  async function handleApprovalChange(row: DialogMobileBillSummaryRow, value: string) {
+    const updated = await setDialogMobileApprovalOverride(row.bill_line_item_id, { approval_override: value });
     setSummaryRows((rows) => rows.map((r) => (r.bill_line_item_id === updated.bill_line_item_id ? updated : r)));
   }
 
   async function handleSetBucketExclusion(lineItemId: string, isBucketExcluded: boolean) {
-    const updated = await setBucketExclusion(lineItemId, { is_bucket_excluded: isBucketExcluded });
+    const updated = await setDialogMobileBucketExclusion(lineItemId, { is_bucket_excluded: isBucketExcluded });
     setSummaryRows((rows) => rows.map((r) => (r.bill_line_item_id === updated.bill_line_item_id ? updated : r)));
   }
 
-  async function handleSetLineItemCharges(lineItemId: string, payload: LineItemChargeUpdateInput) {
-    const updated = await setLineItemCharges(lineItemId, payload);
+  async function handleSetLineItemCharges(lineItemId: string, payload: DialogMobileLineItemChargeUpdateInput) {
+    const updated = await setDialogMobileLineItemCharges(lineItemId, payload);
     setSummaryRows((rows) => rows.map((r) => (r.bill_line_item_id === updated.bill_line_item_id ? updated : r)));
   }
 
@@ -65,7 +65,7 @@ export default function BillsPage() {
 
   async function handleSaveBucketRate(cost: number | null, vat: number | null) {
     if (!selectedPeriod) return;
-    const rows = await setBucketRateOverride(selectedPeriod.id, {
+    const rows = await setDialogMobileBucketRateOverride(selectedPeriod.id, {
       bucket_cost_override: cost,
       bucket_vat_override: vat,
     });
@@ -73,7 +73,7 @@ export default function BillsPage() {
     setShowBucketRatePanel(false);
     // The override lives on the bill period itself, so refresh it too —
     // otherwise reopening this panel would show stale override values.
-    const refreshedPeriods = await listBillPeriods();
+    const refreshedPeriods = await listDialogMobileBillPeriods();
     setPeriods(refreshedPeriods);
     const refreshed = refreshedPeriods.find((p) => p.id === selectedPeriod.id);
     if (refreshed) setSelectedPeriod(refreshed);
@@ -88,7 +88,7 @@ export default function BillsPage() {
 
   async function handleDeletePeriod() {
     if (!deletingPeriod) return;
-    await deleteBillPeriod(deletingPeriod.id);
+    await deleteDialogMobileBillPeriod(deletingPeriod.id);
     setDeletingPeriod(null);
     loadPeriods();
   }
@@ -106,7 +106,7 @@ export default function BillsPage() {
   const money = (v: string | number) => `Rs. ${Number(v).toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
   const hasBreakdown = summaryRows.some((r) => r.voice_rental !== null);
 
-  const sum = (key: keyof BillSummaryRow) => filteredRows.reduce((acc, r) => acc + Number(r[key] as string), 0);
+  const sum = (key: keyof DialogMobileBillSummaryRow) => filteredRows.reduce((acc, r) => acc + Number(r[key] as string), 0);
   const totals = {
     total_usage_charges: sum("total_usage_charges"),
     voice_rental: sum("voice_rental"),
@@ -347,7 +347,7 @@ export default function BillsPage() {
         </div>
 
         {showBucketExclusionPanel && (
-          <BucketExclusionPanel
+          <DialogMobileBucketExclusionPanel
             rows={summaryRows}
             onSave={handleSetBucketExclusion}
             onCancel={() => setShowBucketExclusionPanel(false)}
@@ -355,7 +355,7 @@ export default function BillsPage() {
         )}
 
         {showManageDataBucketPanel && (
-          <ManageDataBucketPanel
+          <DialogMobileManageDataBucketPanel
             rows={summaryRows}
             onSave={handleSetLineItemCharges}
             onCancel={() => setShowManageDataBucketPanel(false)}
@@ -363,7 +363,7 @@ export default function BillsPage() {
         )}
 
         {showBucketRatePanel && (
-          <BucketRatePanel
+          <DialogMobileBucketRatePanel
             periodLabel={selectedPeriod.label}
             currentOverrideCost={selectedPeriod.bucket_cost_override}
             currentOverrideVat={selectedPeriod.bucket_vat_override}
@@ -451,7 +451,7 @@ export default function BillsPage() {
       </div>
 
       {showUpload && (
-        <BillUploadPanel
+        <DialogMobileBillUploadPanel
           onImported={() => {
             setShowUpload(false);
             loadPeriods();
@@ -461,7 +461,7 @@ export default function BillsPage() {
       )}
 
       {deletingPeriod && (
-        <ConfirmPanel
+        <DialogMobileConfirmPanel
           title="Delete this bill?"
           message={`This removes "${deletingPeriod.label}" and all its line items permanently. This can't be undone.`}
           onConfirm={handleDeletePeriod}

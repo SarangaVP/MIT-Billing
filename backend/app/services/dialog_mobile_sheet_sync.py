@@ -30,8 +30,8 @@ import uuid
 import openpyxl
 from sqlalchemy.orm import Session
 
-from app.models.employee import Employee
-from app.models.mobile_number import MobileNumber, MobileNumberStatus
+from app.models.dialog_mobile_employee import DialogMobileEmployee
+from app.models.dialog_mobile_mobile_number import DialogMobileMobileNumber, DialogMobileMobileNumberStatus
 
 ADDITIONAL_BLOCK_MARKER = "Additional common connection"
 UNRESOLVED_EMP_NO_PLACEHOLDERS = {"General"}
@@ -143,8 +143,8 @@ def sync_employee_sheet(db: Session, xlsx_path: str) -> dict:
     """
     main_rows = load_main_table_rows(xlsx_path)
 
-    employee_by_emp_no: dict[str, Employee] = {e.emp_no: e for e in db.query(Employee).all()}
-    number_by_mobile: dict[str, MobileNumber] = {n.mobile_no: n for n in db.query(MobileNumber).all()}
+    employee_by_emp_no: dict[str, DialogMobileEmployee] = {e.emp_no: e for e in db.query(DialogMobileEmployee).all()}
+    number_by_mobile: dict[str, DialogMobileMobileNumber] = {n.mobile_no: n for n in db.query(DialogMobileMobileNumber).all()}
 
     # Group real (non-"General") rows by EMP No first, same as before —
     # one employee can have multiple rows (multiple numbers).
@@ -187,7 +187,7 @@ def sync_employee_sheet(db: Session, xlsx_path: str) -> dict:
     inserted, updated, revived, retired_employees = 0, 0, 0, 0
     numbers_added, numbers_retired, numbers_reactivated = 0, 0, 0
 
-    def upsert_employee_fields(employee: Employee, source_row, synthetic_name: str | None = None, is_general: bool = False):
+    def upsert_employee_fields(employee: DialogMobileEmployee, source_row, synthetic_name: str | None = None, is_general: bool = False):
         clean_name, _ = split_name_and_project_label(clean(source_row["name"]))
         employee.name = synthetic_name if synthetic_name is not None else clean_name
         employee.lob = clean(source_row["lob"])
@@ -205,7 +205,7 @@ def sync_employee_sheet(db: Session, xlsx_path: str) -> dict:
 
         existing = employee_by_emp_no.get(emp_no)
         if existing is None:
-            employee = Employee(emp_no=emp_no)
+            employee = DialogMobileEmployee(emp_no=emp_no)
             upsert_employee_fields(employee, source_row)
             db.add(employee)
             db.flush()
@@ -226,23 +226,23 @@ def sync_employee_sheet(db: Session, xlsx_path: str) -> dict:
         for mobile_no, project_label in new_numbers.items():
             existing_number = number_by_mobile.get(mobile_no)
             if existing_number is None:
-                db.add(MobileNumber(
+                db.add(DialogMobileMobileNumber(
                     employee_id=employee.id, mobile_no=mobile_no,
                     is_primary=not current_numbers, project_label=project_label,
-                    status=MobileNumberStatus.active,
+                    status=DialogMobileMobileNumberStatus.active,
                 ))
                 numbers_added += 1
             elif existing_number.employee_id != employee.id:
                 conflicts.append((emp_no, mobile_no, f"claimed by a different employee"))
             else:
-                if existing_number.status != MobileNumberStatus.active:
-                    existing_number.status = MobileNumberStatus.active
+                if existing_number.status != DialogMobileMobileNumberStatus.active:
+                    existing_number.status = DialogMobileMobileNumberStatus.active
                     numbers_reactivated += 1
                 existing_number.project_label = project_label
 
         for mobile_no, number in current_numbers.items():
-            if mobile_no not in new_numbers and number.status == MobileNumberStatus.active:
-                number.status = MobileNumberStatus.inactive
+            if mobile_no not in new_numbers and number.status == DialogMobileMobileNumberStatus.active:
+                number.status = DialogMobileMobileNumberStatus.inactive
                 numbers_retired += 1
 
     # ---- "General" lines — each is its own synthetic employee ----
@@ -252,14 +252,14 @@ def sync_employee_sheet(db: Session, xlsx_path: str) -> dict:
         existing = employee_by_emp_no.get(synthetic_emp_no)
 
         if existing is None:
-            employee = Employee(emp_no=synthetic_emp_no)
+            employee = DialogMobileEmployee(emp_no=synthetic_emp_no)
             upsert_employee_fields(employee, source_row, synthetic_name=base_name, is_general=True)
             db.add(employee)
             db.flush()
             employee_by_emp_no[synthetic_emp_no] = employee
             existing_number = number_by_mobile.get(mobile_no)
             if existing_number is None:
-                db.add(MobileNumber(employee_id=employee.id, mobile_no=mobile_no, is_primary=True))
+                db.add(DialogMobileMobileNumber(employee_id=employee.id, mobile_no=mobile_no, is_primary=True))
                 numbers_added += 1
             inserted += 1
         else:

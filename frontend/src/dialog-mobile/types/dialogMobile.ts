@@ -1,12 +1,75 @@
-// Mirrors backend/app/schemas/bill.py
+// Mirrors backend/app/schemas/dialog_mobile_employee.py, dialog_mobile_mobile_number.py, dialog_mobile_bill.py
 // NOTE: numeric fields are typed `string` because FastAPI/Pydantic
 // serializes Decimal as a JSON string (to avoid float precision loss) —
 // they are NOT native JSON numbers. Always wrap with Number(v) before
 // doing arithmetic on two of these fields together.
 
-export type SourceFormat = "pdf" | "xls";
+export type DialogMobileMobileNumberStatus = "active" | "inactive";
 
-export interface BillPeriod {
+export interface DialogMobileMobileNumber {
+  id: string;
+  mobile_no: string;
+  is_primary: boolean;
+  status: DialogMobileMobileNumberStatus;
+  project_label: string | null;
+  created_at: string;
+}
+
+export interface DialogMobileEmployee {
+  id: string;
+  emp_no: string;
+  name: string;
+  lob: string | null;
+  cadre: string | null;
+  credit_limit: number | null;
+  level: string | null;
+  email: string | null;
+  resignation: string | null; // free text, e.g. "No" or a date — matches source sheet
+  is_deleted: boolean;
+  is_general_line: boolean;
+  created_at: string;
+  updated_at: string;
+  mobile_numbers: DialogMobileMobileNumber[];
+}
+
+export interface DialogMobileEmployeeCreateInput {
+  emp_no: string;
+  name: string;
+  mobile_no?: string | null; // optional — some employees have no number at all
+  lob?: string | null;
+  cadre?: string | null;
+  credit_limit?: number | null;
+  level?: string | null;
+  email?: string | null;
+  resignation?: string | null;
+}
+
+export interface DialogMobileEmployeeUpdateInput {
+  emp_no?: string;
+  name?: string;
+  lob?: string | null;
+  cadre?: string | null;
+  credit_limit?: number | null;
+  level?: string | null;
+  email?: string | null;
+  resignation?: string | null;
+}
+
+export interface DialogMobileMobileNumberCreateInput {
+  mobile_no: string;
+  is_primary?: boolean;
+}
+
+export interface DialogMobileEmployeeListFilters {
+  search?: string;
+  lob?: string;
+}
+
+// --- Bills ---
+
+export type DialogMobileSourceFormat = "pdf" | "xls";
+
+export interface DialogMobileBillPeriod {
   id: string;
   label: string;
   corporate_code: string | null;
@@ -15,7 +78,7 @@ export interface BillPeriod {
   invoice_date: string | null;
   stated_total_charges_for_bill_period: string | null;
   stated_total_due_amount: string | null;
-  source_format: SourceFormat;
+  source_format: DialogMobileSourceFormat;
   reconciled: boolean;
   reconciliation_discrepancy: string | null;
   bucket_cost_override: string | null;
@@ -23,17 +86,17 @@ export interface BillPeriod {
   created_at: string;
 }
 
-export interface ImportResult {
+export interface DialogMobileImportResult {
   bill_period_id: string;
   line_items_imported: number;
   parsed_total_charges_for_bill_period: string;
   stated_total_charges_for_bill_period: string | null;
   reconciled: boolean;
   reconciliation_discrepancy: string | null;
-  source_format: SourceFormat;
+  source_format: DialogMobileSourceFormat;
 }
 
-export interface BillSummaryRow {
+export interface DialogMobileBillSummaryRow {
   bill_line_item_id: string;
   mobile_no: string;
 
@@ -74,20 +137,20 @@ export interface BillSummaryRow {
   is_bucket_excluded: boolean;
 }
 
-export interface ApprovalOverrideInput {
+export interface DialogMobileApprovalOverrideInput {
   approval_override: string | null;
 }
 
-export interface BucketExclusionInput {
+export interface DialogMobileBucketExclusionInput {
   is_bucket_excluded: boolean;
 }
 
-export interface BucketRateOverrideInput {
+export interface DialogMobileBucketRateOverrideInput {
   bucket_cost_override: number | null;
   bucket_vat_override: number | null;
 }
 
-export interface LineItemChargeUpdateInput {
+export interface DialogMobileLineItemChargeUpdateInput {
   total_usage_charges: number;
   idd: number;
   roaming: number;

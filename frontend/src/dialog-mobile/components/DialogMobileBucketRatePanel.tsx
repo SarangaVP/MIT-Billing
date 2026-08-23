@@ -8,7 +8,7 @@ interface Props {
   onCancel: () => void;
 }
 
-export default function BucketRatePanel({
+export default function DialogMobileBucketRatePanel({
   periodLabel,
   currentOverrideCost,
   currentOverrideVat,
@@ -74,18 +74,22 @@ export default function BucketRatePanel({
 
         {error && <p className="form-error">{error}</p>}
 
-        <div className="panel-actions">
-          {hasOverride && (
-            <button type="button" className="btn btn-ghost" onClick={handleClear} disabled={saving}>
-              Clear (reset to Rs. 0)
+        <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "space-between", gap: 10, marginTop: 8 }}>
+          <div>
+            {hasOverride && (
+              <button type="button" className="btn btn-ghost" onClick={handleClear} disabled={saving}>
+                Clear (reset to Rs. 0)
+              </button>
+            )}
+          </div>
+          <div className="panel-actions" style={{ margin: 0 }}>
+            <button type="button" className="btn btn-ghost" onClick={onCancel}>
+              Cancel
             </button>
-          )}
-          <button type="button" className="btn btn-ghost" onClick={onCancel}>
-            Cancel
-          </button>
-          <button type="submit" className="btn btn-primary" disabled={saving}>
-            {saving ? "Saving…" : "Save for this month"}
-          </button>
+            <button type="submit" className="btn btn-primary" disabled={saving}>
+              {saving ? "Saving…" : "Save for this month"}
+            </button>
+          </div>
         </div>
       </form>
     </div>

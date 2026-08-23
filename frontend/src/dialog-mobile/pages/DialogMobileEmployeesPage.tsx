@@ -1,25 +1,25 @@
 import { useEffect, useState, useCallback } from "react";
-import type { Employee, EmployeeCreateInput, EmployeeUpdateInput } from "../types/employee";
-import { listEmployees, createEmployee, updateEmployee, deleteEmployee, importEmployeeSheet } from "../api/employees";
-import EmployeeFormPanel from "../components/EmployeeFormPanel";
-import EmployeeSheetUploadPanel from "../components/EmployeeSheetUploadPanel";
+import type { DialogMobileEmployee, DialogMobileEmployeeCreateInput, DialogMobileEmployeeUpdateInput } from "../types/dialogMobile";
+import { listDialogMobileEmployees, createDialogMobileEmployee, updateDialogMobileEmployee, deleteDialogMobileEmployee, importDialogMobileEmployeeSheet } from "../api/dialogMobile";
+import DialogMobileEmployeeFormPanel from "../components/DialogMobileEmployeeFormPanel";
+import EmployeeSheetUploadPanel from "../../components/EmployeeSheetUploadPanel";
 
-export default function EmployeesPage() {
-  const [employees, setEmployees] = useState<Employee[]>([]);
+export default function DialogMobileEmployeesPage() {
+  const [employees, setEmployees] = useState<DialogMobileEmployee[]>([]);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const [search, setSearch] = useState("");
   const [lobFilter, setLobFilter] = useState("");
 
-  const [formTarget, setFormTarget] = useState<Employee | "new" | null>(null);
+  const [formTarget, setFormTarget] = useState<DialogMobileEmployee | "new" | null>(null);
   const [showSheetUpload, setShowSheetUpload] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
     setErrorMsg(null);
     try {
-      const data = await listEmployees({
+      const data = await listDialogMobileEmployees({
         search: search || undefined,
         lob: lobFilter || undefined,
       });
@@ -46,23 +46,23 @@ export default function EmployeesPage() {
 
   const lobOptions = [...new Set(employees.map((e) => e.lob).filter((v): v is string => Boolean(v)))].sort();
 
-  async function handleSave(payload: EmployeeCreateInput | EmployeeUpdateInput) {
+  async function handleSave(payload: DialogMobileEmployeeCreateInput | DialogMobileEmployeeUpdateInput) {
     if (formTarget && formTarget !== "new") {
-      await updateEmployee(formTarget.id, payload as EmployeeUpdateInput);
+      await updateDialogMobileEmployee(formTarget.id, payload as DialogMobileEmployeeUpdateInput);
     } else {
-      await createEmployee(payload as EmployeeCreateInput);
+      await createDialogMobileEmployee(payload as DialogMobileEmployeeCreateInput);
       setFormTarget(null);
     }
     load();
   }
 
-  async function handleDelete(employee: Employee) {
+  async function handleDelete(employee: DialogMobileEmployee) {
     if (!confirm(`Remove ${employee.name} from the employee list? Their billing history is kept.`)) return;
-    await deleteEmployee(employee.id);
+    await deleteDialogMobileEmployee(employee.id);
     load();
   }
 
-  function formatNumbers(employee: Employee): string {
+  function formatNumbers(employee: DialogMobileEmployee): string {
     const active = employee.mobile_numbers.filter((n) => n.status === "active");
     if (active.length === 0) return "—";
     return active.map((n) => n.mobile_no).join(", ");
@@ -168,7 +168,7 @@ export default function EmployeesPage() {
       </div>
 
       {formTarget !== null && (
-        <EmployeeFormPanel
+        <DialogMobileEmployeeFormPanel
           employee={formTarget === "new" ? null : formTarget}
           onSave={handleSave}
           onNumbersChanged={load}
@@ -179,7 +179,7 @@ export default function EmployeesPage() {
       {showSheetUpload && (
         <EmployeeSheetUploadPanel
           title="Upload employee sheet"
-          uploadFn={importEmployeeSheet}
+          uploadFn={importDialogMobileEmployeeSheet}
           onImported={load}
           onCancel={() => setShowSheetUpload(false)}
         />

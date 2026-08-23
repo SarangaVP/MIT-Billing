@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
-import type { ImportResult } from "../types/bill";
-import { importBillPdf } from "../api/bills";
+import type { DialogMobileImportResult } from "../types/dialogMobile";
+import { importDialogMobileBillPdf } from "../api/dialogMobile";
 
 interface Props {
   onImported: () => void;
@@ -22,12 +22,12 @@ function money(v: string | number): string {
   return `Rs. ${Number(v).toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
 }
 
-export default function BillUploadPanel({ onImported, onCancel }: Props) {
+export default function DialogMobileBillUploadPanel({ onImported, onCancel }: Props) {
   const [month, setMonth] = useState(() => new Date().toISOString().slice(0, 7));
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [result, setResult] = useState<ImportResult | null>(null);
+  const [result, setResult] = useState<DialogMobileImportResult | null>(null);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -37,7 +37,7 @@ export default function BillUploadPanel({ onImported, onCancel }: Props) {
     setUploading(true);
     try {
       const label = monthValueToLabel(month);
-      const res = await importBillPdf(label, file);
+      const res = await importDialogMobileBillPdf(label, file);
       setResult(res);
       if (res.reconciled || res.source_format === "xls") {
         // .xls imports succeed even with the known dormant-account gap —

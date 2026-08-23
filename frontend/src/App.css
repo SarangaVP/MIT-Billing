@@ -650,6 +650,7 @@ tbody tr:hover {
 .panel-actions {
   display: flex;
   justify-content: flex-end;
+  flex-wrap: wrap;
   gap: 10px;
   margin-top: 8px;
 }

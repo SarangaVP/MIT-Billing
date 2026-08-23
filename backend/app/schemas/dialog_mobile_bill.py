@@ -5,7 +5,7 @@ from decimal import Decimal
 from pydantic import BaseModel
 
 
-class BillPeriodOut(BaseModel):
+class DialogMobileBillPeriodOut(BaseModel):
     id: uuid.UUID
     label: str
     corporate_code: str | None
@@ -24,14 +24,14 @@ class BillPeriodOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
-class BucketRateOverrideInput(BaseModel):
+class DialogMobileBucketRateOverrideInput(BaseModel):
     # Both null clears the override, reverting this bill period back to
     # whatever rate is active in the standard rate table.
     bucket_cost_override: Decimal | None = None
     bucket_vat_override: Decimal | None = None
 
 
-class ImportResult(BaseModel):
+class DialogMobileImportResult(BaseModel):
     bill_period_id: uuid.UUID
     line_items_imported: int
     parsed_total_charges_for_bill_period: Decimal
@@ -41,15 +41,15 @@ class ImportResult(BaseModel):
     source_format: str
 
 
-class ApprovalOverrideInput(BaseModel):
+class DialogMobileApprovalOverrideInput(BaseModel):
     approval_override: str | None  # e.g. "Manager approved", or null to clear it
 
 
-class BucketExclusionInput(BaseModel):
+class DialogMobileBucketExclusionInput(BaseModel):
     is_bucket_excluded: bool
 
 
-class LineItemChargeUpdateInput(BaseModel):
+class DialogMobileLineItemChargeUpdateInput(BaseModel):
     """
     Manual correction to a line item's raw charge figures for THIS bill
     period — used via "Manage data bucket" for cases where a connection's
@@ -67,7 +67,7 @@ class LineItemChargeUpdateInput(BaseModel):
     add_to_bill_charges: Decimal
 
 
-class BillSummaryRow(BaseModel):
+class DialogMobileBillSummaryRow(BaseModel):
     """
     Mirrors the source Excel 'Summary' tab, as closely as the source file
     allows. Everything here is either taken straight from the bill or

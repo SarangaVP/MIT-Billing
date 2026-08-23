@@ -6,7 +6,7 @@ from app.database import Base
 from app.types import GUID
 
 
-class BillLineItem(Base):
+class DialogMobileBillLineItem(Base):
     """
     One row per mobile number per bill period, parsed directly from the
     PDF's page-2 Summary table. Deliberately does NOT store a Voice/SMS/Data
@@ -61,10 +61,11 @@ class BillLineItem(Base):
 
     # Manual, per-bill-period decision to exclude this connection from the
     # bucket allocation THIS month — used for "General" lines (see
-    # Employee.is_general_line), which used to be excluded automatically
-    # every month just for being a General line. That's now a deliberate
-    # per-month choice instead: defaults to False on every newly imported
-    # bill, same reset-every-month pattern as Mobitel's project cost.
+    # DialogMobileEmployee.is_general_line), which used to be excluded
+    # automatically every month just for being a General line. That's now
+    # a deliberate per-month choice instead: defaults to False on every
+    # newly imported bill, same reset-every-month pattern as Mobitel's
+    # project cost.
     is_bucket_excluded = Column(Boolean, nullable=False, default=False)
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())

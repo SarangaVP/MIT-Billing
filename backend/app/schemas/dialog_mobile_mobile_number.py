@@ -3,25 +3,25 @@ from datetime import datetime
 
 from pydantic import BaseModel
 
-from app.models.mobile_number import MobileNumberStatus
+from app.models.dialog_mobile_mobile_number import DialogMobileMobileNumberStatus
 
 
-class MobileNumberOut(BaseModel):
+class DialogMobileMobileNumberOut(BaseModel):
     id: uuid.UUID
     mobile_no: str
     is_primary: bool
-    status: MobileNumberStatus
+    status: DialogMobileMobileNumberStatus
     project_label: str | None = None
     created_at: datetime
 
     model_config = {"from_attributes": True}
 
 
-class MobileNumberCreate(BaseModel):
+class DialogMobileMobileNumberCreate(BaseModel):
     mobile_no: str
     is_primary: bool = False
     project_label: str | None = None
 
 
-class MobileNumberUpdate(BaseModel):
+class DialogMobileMobileNumberUpdate(BaseModel):
     project_label: str | None = None

@@ -40,8 +40,8 @@ import openpyxl
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "backend"))
 
 from app.database import SessionLocal, Base, engine  # noqa: E402
-from app.models.employee import Employee  # noqa: E402
-from app.models.mobile_number import MobileNumber  # noqa: E402
+from app.models.dialog_mobile_employee import DialogMobileEmployee  # noqa: E402
+from app.models.dialog_mobile_mobile_number import DialogMobileMobileNumber  # noqa: E402
 
 ADDITIONAL_BLOCK_MARKER = "Additional common connection"
 UNRESOLVED_EMP_NO_PLACEHOLDERS = {"General"}
@@ -60,7 +60,7 @@ def split_name_and_project_label(raw_name):
     of their mobile numbers are cost-allocated to a specific project,
     some aren't. Previously the employee's OWN name got silently
     overwritten by whichever row happened to be read first, since
-    Employee.name is one shared field, not per-number. This keeps the
+    DialogMobileEmployee.name is one shared field, not per-number. This keeps the
     employee's name clean and consistent, while preserving the per-number
     project label as its own field.
     """
@@ -175,8 +175,8 @@ def main(xlsx_path: str):
     no_number_employees = []
 
     try:
-        existing_emp_nos = {e.emp_no for e in db.query(Employee.emp_no).all()}
-        existing_mobile_nos = {m.mobile_no for m in db.query(MobileNumber.mobile_no).all()}
+        existing_emp_nos = {e.emp_no for e in db.query(DialogMobileEmployee.emp_no).all()}
+        existing_mobile_nos = {m.mobile_no for m in db.query(DialogMobileMobileNumber.mobile_no).all()}
 
         # Column order is now resolved by header name, not position — see load_main_table_rows.
         grouped = {}
@@ -211,7 +211,7 @@ def main(xlsx_path: str):
                 if synthetic_emp_no in existing_emp_nos or mobile_no_str in existing_mobile_nos:
                     continue  # already imported on a previous run
 
-                general_line_employee = Employee(
+                general_line_employee = DialogMobileEmployee(
                     emp_no=synthetic_emp_no,
                     name=base_name,
                     lob=clean(row["lob"]),
@@ -224,7 +224,7 @@ def main(xlsx_path: str):
                 )
                 db.add(general_line_employee)
                 db.flush()
-                db.add(MobileNumber(employee_id=general_line_employee.id, mobile_no=mobile_no_str, is_primary=True))
+                db.add(DialogMobileMobileNumber(employee_id=general_line_employee.id, mobile_no=mobile_no_str, is_primary=True))
                 existing_emp_nos.add(synthetic_emp_no)
                 existing_mobile_nos.add(mobile_no_str)
                 inserted_employees += 1
@@ -262,7 +262,7 @@ def main(xlsx_path: str):
             source_row = data["clean_name_row"] or data["first"]
             clean_source_name, _ = split_name_and_project_label(clean(source_row["name"]))
 
-            employee = Employee(
+            employee = DialogMobileEmployee(
                 emp_no=emp_no,
                 name=clean_source_name,
                 lob=clean(source_row["lob"]),
@@ -292,7 +292,7 @@ def main(xlsx_path: str):
                 if mobile_no in existing_mobile_nos:
                     duplicate_number_details.append((emp_no, mobile_no, "already used elsewhere"))
                     continue
-                db.add(MobileNumber(
+                db.add(DialogMobileMobileNumber(
                     employee_id=employee.id, mobile_no=mobile_no, is_primary=(i == 0),
                     project_label=project_label,
                 ))

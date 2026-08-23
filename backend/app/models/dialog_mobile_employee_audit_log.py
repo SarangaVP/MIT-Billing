@@ -6,7 +6,7 @@ from app.database import Base
 from app.types import GUID, JSONVariant
 
 
-class EmployeeAuditLog(Base):
+class DialogMobileEmployeeAuditLog(Base):
     """
     Every create/update/resign/transfer/delete on an employee writes a row
     here. This matters for a finance tool: if a credit limit or mobile-no

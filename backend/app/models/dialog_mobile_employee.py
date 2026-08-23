@@ -7,7 +7,7 @@ from app.database import Base
 from app.types import GUID
 
 
-class Employee(Base):
+class DialogMobileEmployee(Base):
     __tablename__ = "dialog_mobile_employees"
 
     id = Column(GUID, primary_key=True, default=uuid.uuid4)
@@ -16,7 +16,7 @@ class Employee(Base):
     emp_no = Column(String, unique=True, nullable=False, index=True)
     name = Column(String, nullable=False)
 
-    # Mobile numbers live in their own table (app.models.mobile_number) —
+    # Mobile numbers live in their own table (app.models.dialog_mobile_mobile_number) —
     # an employee can hold more than one number at a time, or none at all.
 
     lob = Column(String, nullable=True)
@@ -43,8 +43,8 @@ class Employee(Base):
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     mobile_numbers = relationship(
-        "MobileNumber",
+        "DialogMobileMobileNumber",
         backref="employee",
-        order_by="MobileNumber.is_primary.desc()",
+        order_by="DialogMobileMobileNumber.is_primary.desc()",
         cascade="all, delete-orphan",
     )
