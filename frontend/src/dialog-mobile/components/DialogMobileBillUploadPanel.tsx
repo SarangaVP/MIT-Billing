@@ -39,19 +39,16 @@ export default function DialogMobileBillUploadPanel({ onImported, onCancel }: Pr
       const label = monthValueToLabel(month);
       const res = await importDialogMobileBillPdf(label, file);
       setResult(res);
-      if (res.reconciled || res.source_format === "xls") {
-        // .xls imports succeed even with the known dormant-account gap —
-        // only a genuinely failed PDF import should block moving on.
-        onImported();
-      }
+      // The backend always saves the import now — a reconciliation mismatch
+      // (PDF or .xls) is recorded and shown as "Off by Rs. X" rather than
+      // blocking the save, so this always proceeds to refresh the list.
+      onImported();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Upload failed");
     } finally {
       setUploading(false);
     }
   }
-
-  const isBlockingFailure = result && !result.reconciled && result.source_format === "pdf";
 
   return (
     <div className="panel-overlay" onClick={onCancel}>
@@ -86,18 +83,15 @@ export default function DialogMobileBillUploadPanel({ onImported, onCancel }: Pr
                 Parsed total <strong>{money(result.parsed_total_charges_for_bill_period)}</strong> matches the
                 invoice exactly.
               </>
-            ) : result.source_format === "xls" ? (
-              <>
-                Imported {result.line_items_imported} lines from the .xls file. Parsed total{" "}
-                {money(result.parsed_total_charges_for_bill_period)} is off by{" "}
-                {money(Math.abs(Number(result.reconciliation_discrepancy ?? 0)))} from the invoice's stated total — this is
-                expected (the .xls export omits some dormant/zero-activity accounts) and was allowed.
-              </>
             ) : (
               <>
-                Reconciliation failed — parsed total {money(result.parsed_total_charges_for_bill_period)} does not
-                match the invoice's stated total{" "}
-                {money(result.stated_total_charges_for_bill_period ?? 0)}. Nothing was saved.
+                Imported {result.line_items_imported} lines from the {result.source_format.toUpperCase()} file.
+                Parsed total {money(result.parsed_total_charges_for_bill_period)} is off by{" "}
+                {money(Math.abs(Number(result.reconciliation_discrepancy ?? 0)))} from the invoice's stated total{" "}
+                {result.stated_total_charges_for_bill_period != null
+                  ? money(result.stated_total_charges_for_bill_period)
+                  : ""}
+                . The bill was still saved — review the discrepancy on the Bills page.
               </>
             )}
           </div>
@@ -105,9 +99,9 @@ export default function DialogMobileBillUploadPanel({ onImported, onCancel }: Pr
 
         <div className="panel-actions">
           <button type="button" className="btn btn-ghost" onClick={onCancel}>
-            {result && !isBlockingFailure ? "Close" : "Cancel"}
+            {result ? "Close" : "Cancel"}
           </button>
-          {!(result && !isBlockingFailure) && (
+          {!result && (
             <button type="submit" className="btn btn-primary" disabled={uploading || !file}>
               {uploading ? "Uploading…" : "Import bill"}
             </button>
