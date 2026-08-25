@@ -327,6 +327,19 @@ textarea:focus {
   box-shadow: var(--shadow-sm);
 }
 
+/* Small fixed-size summary tables (Team Cost, PDF vs Calculated, etc.) always
+   carry their own inline sizing and sit alongside the flex-filled main table
+   inside .page's column layout. Because they have overflow:auto, flexbox
+   treats their automatic minimum height as 0 instead of "tall enough for
+   their content" — so once the main table claims the remaining space, these
+   get squeezed down to almost nothing, hiding their rows entirely even
+   though the markup and text color are perfectly fine. flex-shrink: 0 opts
+   them out of that shrink-to-zero behavior and keeps them at their natural,
+   content-sized height. */
+.table-wrap[style] {
+  flex-shrink: 0;
+}
+
 /* The one "main" table on a page (a direct child of .page, and never one of
    the small fixed-size summary tables — those always carry their own inline
    sizing) grows to fill all remaining vertical space instead of guessing a

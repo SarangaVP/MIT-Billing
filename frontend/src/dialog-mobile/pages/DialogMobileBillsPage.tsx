@@ -7,6 +7,7 @@ import DialogMobileBucketRatePanel from "../components/DialogMobileBucketRatePan
 import DialogMobileManageDataBucketPanel from "../components/DialogMobileManageDataBucketPanel";
 import DialogMobileConfirmPanel from "../components/DialogMobileConfirmPanel";
 import { exportTableToExcel } from "../../utils/exportTable";
+import { exportTeamCostToExcel } from "../../utils/exportTeamCost";
 
 export default function DialogMobileBillsPage() {
   const [periods, setPeriods] = useState<DialogMobileBillPeriod[]>([]);
@@ -21,6 +22,7 @@ export default function DialogMobileBillsPage() {
   const [showBucketExclusionPanel, setShowBucketExclusionPanel] = useState(false);
   const [showBucketRatePanel, setShowBucketRatePanel] = useState(false);
   const [showManageDataBucketPanel, setShowManageDataBucketPanel] = useState(false);
+  const [showBreakdown, setShowBreakdown] = useState(false);
 
   const loadPeriods = useCallback(async () => {
     setLoadingPeriods(true);
@@ -118,6 +120,20 @@ export default function DialogMobileBillsPage() {
   const money = (v: string | number) => `Rs. ${Number(v).toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
   const hasBreakdown = summaryRows.some((r) => r.voice_rental !== null);
 
+  // Groups every connection's Total by LOB, same pattern as Mobitel/Dialog
+  // Data's own Team Cost breakdown — Dialog Mobile has no separate LOB
+  // code field, so that column is always blank here.
+  const teamCostRows = Object.entries(
+    summaryRows.reduce<Record<string, number>>((acc, row) => {
+      const team = row.lob || "Unassigned";
+      acc[team] = (acc[team] || 0) + Number(row.total);
+      return acc;
+    }, {})
+  )
+    .map(([team, cost]) => ({ team, code: null as string | null, cost }))
+    .sort((a, b) => a.team.localeCompare(b.team));
+  const teamCostTotal = teamCostRows.reduce((sum, r) => sum + r.cost, 0);
+
   const sum = (key: keyof DialogMobileBillSummaryRow) => filteredRows.reduce((acc, r) => acc + Number(r[key] as string), 0);
   const totals = {
     total_usage_charges: sum("total_usage_charges"),
@@ -212,11 +228,55 @@ export default function DialogMobileBillsPage() {
             <button className="btn btn-ghost" onClick={() => setShowManageDataBucketPanel(true)}>
               Manage data bucket
             </button>
+            <button className="btn btn-ghost" onClick={() => setShowBreakdown((v) => !v)}>
+              {showBreakdown ? "Hide" : "Show"} team cost
+            </button>
             <button className="btn btn-ghost" onClick={handleExport}>
               Export to Excel
             </button>
           </div>
         </div>
+
+        {showBreakdown && (
+          <div className="table-wrap" style={{ maxWidth: 460, marginBottom: 20 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 12px" }}>
+              <strong style={{ fontSize: 13 }}>Team Cost</strong>
+              <button
+                type="button"
+                className="link-btn"
+                onClick={() =>
+                  exportTeamCostToExcel(
+                    teamCostRows,
+                    teamCostTotal,
+                    `DialogMobile_${selectedPeriod.label.replace(/\s+/g, "_")}_team_cost.xlsx`
+                  )
+                }
+              >
+                Export to Excel
+              </button>
+            </div>
+            <table>
+              <thead>
+                <tr>
+                  <th>Team</th>
+                  <th>Cost</th>
+                </tr>
+              </thead>
+              <tbody>
+                {teamCostRows.map((r) => (
+                  <tr key={r.team}>
+                    <td>{r.team}</td>
+                    <td className="mono">{money(r.cost)}</td>
+                  </tr>
+                ))}
+                <tr className="row-strong">
+                  <td>Grand Total</td>
+                  <td className="mono">{money(teamCostTotal)}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        )}
 
         <div className="toolbar">
           <input
