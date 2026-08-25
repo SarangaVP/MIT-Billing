@@ -38,8 +38,14 @@ class MobitelBillPeriod(Base):
     reconciled = Column(Boolean, nullable=False, default=True)
     reconciliation_discrepancy = Column(Numeric(14, 2), nullable=True)
 
+    # The bucket's total contracted size in GB, used as the divisor for the
+    # automatic project-cost formula (price per GB = Net / bucket_total_gb —
+    # see mobitel_bill_service.py). Defaults to 4000, but this is a plan
+    # detail that can genuinely change between months, so it's editable
+    # per bill period via "Set bucket total GB" rather than a hardcoded
+    # constant.
+    bucket_total_gb = Column(Numeric(10, 2), nullable=False, default=4000)
+
     extraction_method = Column(String, nullable=False, default="regex_fallback")
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-
-    

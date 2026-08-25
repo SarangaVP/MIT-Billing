@@ -18,12 +18,13 @@ from app.schemas.mobitel_bill import MobitelImportResult
 
 logger = logging.getLogger(__name__)
 
-# Auto project-cost formula: price per GB = (bucket Net) / MOBITEL_BUCKET_TOTAL_GB.
+# Auto project-cost formula: price per GB = (bucket Net) / bucket_total_gb.
 # A project connection's cost = price_per_gb * its allocated Data Volume (Mb)
 # from the Portal sheet, converted to GB. Confirmed formula: 1 GB = 1000 Mb
-# (not 1024), and the bucket's total contracted size is a fixed 4000 GB
-# every month, not something that varies per bill.
-MOBITEL_BUCKET_TOTAL_GB = Decimal("4000")
+# (not 1024). The bucket's total contracted size (bucket_total_gb) defaults
+# to 4000 GB but is stored per bill period and editable — it's a plan
+# detail that can genuinely change between months, not a true constant.
+MOBITEL_BUCKET_TOTAL_GB_DEFAULT = Decimal("4000")
 MOBITEL_MB_PER_GB = Decimal("1000")
 
 # Connections with a known, permanently fixed static IP cost — applied
@@ -153,9 +154,9 @@ def _extract_bill_fields(pdf_path: str) -> tuple[dict, str]:
     return parse_mobitel_bill(pdf_path), "regex_fallback"
 
 
-def _calculate_auto_project_cost(net: Decimal, data_volume_mb) -> Decimal | None:
+def _calculate_auto_project_cost(net: Decimal, data_volume_mb, bucket_total_gb: Decimal) -> Decimal | None:
     """
-    project cost = (Net / 4000) * (Data Volume Mb / 1000)
+    project cost = (Net / bucket_total_gb) * (Data Volume Mb / 1000)
     Returns None if data_volume_mb is missing/non-numeric — caller should
     fall back to the normal equal split for that connection in that case.
     """
@@ -165,7 +166,7 @@ def _calculate_auto_project_cost(net: Decimal, data_volume_mb) -> Decimal | None
         gb = Decimal(str(data_volume_mb)) / MOBITEL_MB_PER_GB
     except (ValueError, TypeError):
         return None
-    price_per_gb = net / MOBITEL_BUCKET_TOTAL_GB
+    price_per_gb = net / bucket_total_gb
     return (price_per_gb * gb).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
 
@@ -228,6 +229,7 @@ def import_mobitel_bill(db: Session, pdf_path: str, label: str, portal_path: str
     # Volume is available this month gets its cost calculated from the
     # formula instead of the equal split — same exclude-from-pool-and-
     # headcount treatment as a manually-set project cost.
+    bucket_total_gb = MOBITEL_BUCKET_TOTAL_GB_DEFAULT
     project_costs: dict[uuid.UUID, Decimal] = {}
     for connection in active_connections:
         if not connection.project_label:
@@ -235,7 +237,7 @@ def import_mobitel_bill(db: Session, pdf_path: str, label: str, portal_path: str
         usage = portal_data.get(connection.mobile_no)
         if not usage:
             continue
-        auto_cost = _calculate_auto_project_cost(net, usage.get("data_volume_mb"))
+        auto_cost = _calculate_auto_project_cost(net, usage.get("data_volume_mb"), bucket_total_gb)
         if auto_cost is not None:
             project_costs[connection.id] = auto_cost
 
@@ -279,6 +281,7 @@ def import_mobitel_bill(db: Session, pdf_path: str, label: str, portal_path: str
         total_payable=Decimal(str(parsed["total_payable"])) if parsed["total_payable"] is not None else None,
         users_count=users,
         per_user_cost=per_user_cost,
+        bucket_total_gb=bucket_total_gb,
         extraction_method=extraction_method,
     )
     db.add(bill_period)
@@ -462,6 +465,49 @@ def update_static_ip_cost(db: Session, line_item_id: uuid.UUID, new_cost: Decima
 
     bill_period = get_bill_period(db, line_item.bill_period_id)
     line_item.static_ip_cost = new_cost
+    db.flush()
+
+    _recalculate_period(db, bill_period)
+    db.commit()
+
+    return get_summary(db, bill_period.id)
+
+
+def update_bucket_total_gb(db: Session, bill_period_id: uuid.UUID, new_bucket_total_gb: Decimal) -> list[dict]:
+    """
+    Updates the bucket's total contracted GB for THIS bill period and
+    recalculates every auto-eligible project cost (a connection with a
+    project_label AND a stored Data Volume from the Portal sheet) using
+    the new divisor — then re-splits the remaining Net across everyone
+    else via the same _recalculate_period logic used for manual edits.
+
+    Only touches connections that were auto-calculation-eligible in the
+    first place (project_label + Data Volume present); a connection with
+    a purely manually-set project cost (no project_label/Data Volume) is
+    left untouched.
+    """
+    if new_bucket_total_gb <= 0:
+        raise HTTPException(status_code=422, detail="Bucket total GB must be a positive number")
+
+    bill_period = get_bill_period(db, bill_period_id)
+    net = bill_period.net or Decimal("0")
+
+    items = (
+        db.query(MobitelBillLineItem, MobitelConnection)
+        .join(MobitelConnection, MobitelConnection.id == MobitelBillLineItem.connection_id)
+        .filter(MobitelBillLineItem.bill_period_id == bill_period.id)
+        .all()
+    )
+
+    for line_item, connection in items:
+        if not connection.project_label or line_item.data_volume_mb is None:
+            continue
+        auto_cost = _calculate_auto_project_cost(net, line_item.data_volume_mb, new_bucket_total_gb)
+        if auto_cost is not None:
+            line_item.is_project_cost = True
+            line_item.project_cost_amount = auto_cost
+
+    bill_period.bucket_total_gb = new_bucket_total_gb
     db.flush()
 
     _recalculate_period(db, bill_period)

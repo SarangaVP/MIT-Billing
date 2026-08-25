@@ -106,6 +106,13 @@ export function setMobitelProjectCost(lineItemId: string, isProjectCost: boolean
   });
 }
 
+export function setMobitelBucketTotalGb(billPeriodId: string, bucketTotalGb: string): Promise<MobitelBillLineItemOut[]> {
+  return request<MobitelBillLineItemOut[]>(`/mobitel/bills/${billPeriodId}/bucket-total-gb`, {
+    method: "PUT",
+    body: JSON.stringify({ bucket_total_gb: bucketTotalGb }),
+  });
+}
+
 export async function deleteMobitelBillPeriod(billPeriodId: string): Promise<void> {
   const res = await fetch(`${BASE_URL}/mobitel/bills/${billPeriodId}`, { method: "DELETE" });
   if (!res.ok) {

@@ -57,6 +57,7 @@ export interface MobitelBillPeriod {
   per_user_cost: string | null;
   reconciled: boolean;
   reconciliation_discrepancy: string | null;
+  bucket_total_gb: string;
   created_at: string;
 }
 

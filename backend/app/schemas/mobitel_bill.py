@@ -23,10 +23,15 @@ class MobitelBillPeriodOut(BaseModel):
     per_user_cost: Decimal | None
     reconciled: bool
     reconciliation_discrepancy: Decimal | None
+    bucket_total_gb: Decimal
     extraction_method: str
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class MobitelBucketTotalGbUpdateInput(BaseModel):
+    bucket_total_gb: Decimal
 
 
 class MobitelImportResult(BaseModel):

@@ -1,9 +1,10 @@
 import { useEffect, useState, useCallback } from "react";
 import type { MobitelBillPeriod, MobitelBillLineItemOut } from "../types/mobitel";
-import { listMobitelBillPeriods, getMobitelBillSummary, setMobitelStaticIpCost, setMobitelProjectCost, deleteMobitelBillPeriod } from "../api/mobitel";
+import { listMobitelBillPeriods, getMobitelBillSummary, setMobitelStaticIpCost, setMobitelProjectCost, setMobitelBucketTotalGb, deleteMobitelBillPeriod } from "../api/mobitel";
 import MobitelBillUploadPanel from "../components/MobitelBillUploadPanel";
 import MobitelManageStaticIpPanel from "../components/MobitelManageStaticIpPanel";
 import MobitelManageProjectCostPanel from "../components/MobitelManageProjectCostPanel";
+import MobitelBucketTotalGbPanel from "../components/MobitelBucketTotalGbPanel";
 import MobitelConfirmPanel from "../components/MobitelConfirmPanel";
 import { exportTeamCostToExcel } from "../../utils/exportTeamCost";
 import { exportTableToExcel } from "../../utils/exportTable";
@@ -18,6 +19,7 @@ export default function MobitelBillsPage() {
   const [search, setSearch] = useState("");
   const [showStaticIpPanel, setShowStaticIpPanel] = useState(false);
   const [showProjectCostPanel, setShowProjectCostPanel] = useState(false);
+  const [showBucketTotalGbPanel, setShowBucketTotalGbPanel] = useState(false);
   const [deletingPeriod, setDeletingPeriod] = useState<MobitelBillPeriod | null>(null);
   const [showBreakdown, setShowBreakdown] = useState(false);
 
@@ -68,6 +70,17 @@ export default function MobitelBillsPage() {
       const refreshed = refreshedPeriods.find((p) => p.id === selectedPeriod.id);
       if (refreshed) setSelectedPeriod(refreshed);
     }
+  }
+
+  async function handleSetBucketTotalGb(bucketTotalGb: string) {
+    if (!selectedPeriod) return;
+    const rows = await setMobitelBucketTotalGb(selectedPeriod.id, bucketTotalGb);
+    setSummaryRows(rows);
+    setShowBucketTotalGbPanel(false);
+    const refreshedPeriods = await listMobitelBillPeriods();
+    setPeriods(refreshedPeriods);
+    const refreshed = refreshedPeriods.find((p) => p.id === selectedPeriod.id);
+    if (refreshed) setSelectedPeriod(refreshed);
   }
 
   async function handleDeletePeriod() {
@@ -177,6 +190,9 @@ export default function MobitelBillsPage() {
             </button>
             <button className="btn btn-ghost" onClick={() => setShowProjectCostPanel(true)}>
               Manage project cost
+            </button>
+            <button className="btn btn-ghost" onClick={() => setShowBucketTotalGbPanel(true)}>
+              Set bucket total GB
             </button>
             <button className="btn btn-ghost" onClick={() => setShowBreakdown((v) => !v)}>
               {showBreakdown ? "Hide" : "Show"} team cost & reconciliation
@@ -363,6 +379,15 @@ export default function MobitelBillsPage() {
             rows={summaryRows}
             onSave={handleSetProjectCost}
             onCancel={() => setShowProjectCostPanel(false)}
+          />
+        )}
+
+        {showBucketTotalGbPanel && (
+          <MobitelBucketTotalGbPanel
+            periodLabel={selectedPeriod.label}
+            currentBucketTotalGb={selectedPeriod.bucket_total_gb}
+            onSave={handleSetBucketTotalGb}
+            onCancel={() => setShowBucketTotalGbPanel(false)}
           />
         )}
       </div>
