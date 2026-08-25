@@ -143,7 +143,7 @@ export default function DialogMobileBillsPage() {
     const headers = [
       "Mobile No", "EMP No", "Name", "Credit Limit", "Project", "Total Usage Charges",
       ...(hasBreakdown ? ["Voice Rental", "Voice Usage", "SMS", "Data Rental", "Data Usage"] : []),
-      "IDD", "Roaming", "Charges for Bill Period", "VAT", "Net Amount", "Bucket Cost", "Total",
+      "IDD", "Roaming", "Charges for Bill Period", "VAT", "Net Amount", "Net - Credit Limit", "Bucket Cost", "Total",
       "VAS", "Add To Bill Charges", "Salary Deduction (VAS + Add To Bill Charges)", "Need Approval",
     ];
     const rows = filteredRows.map((row) => [
@@ -160,7 +160,8 @@ export default function DialogMobileBillsPage() {
           ]
         : []),
       Number(row.idd), Number(row.roaming), Number(row.charges_for_bill_period), Number(row.vat),
-      Number(row.net_amount), Number(row.bucket_cost), Number(row.total),
+      Number(row.net_amount), Number(row.net_amount) - Number(row.credit_limit ?? 0),
+      Number(row.bucket_cost), Number(row.total),
       Number(row.vas), Number(row.add_to_bill_charges), Number(row.salary_deduction), row.need_approval,
     ]);
     const totalsRow = [
@@ -172,7 +173,7 @@ export default function DialogMobileBillsPage() {
           ]
         : []),
       Number(totals.idd.toFixed(2)), Number(totals.roaming.toFixed(2)), Number(totals.charges_for_bill_period.toFixed(2)),
-      Number(totals.vat.toFixed(2)), Number(totals.net_amount.toFixed(2)), Number(totals.bucket_cost.toFixed(2)),
+      Number(totals.vat.toFixed(2)), Number(totals.net_amount.toFixed(2)), "", Number(totals.bucket_cost.toFixed(2)),
       Number(totals.total.toFixed(2)), Number(totals.vas.toFixed(2)), Number(totals.add_to_bill_charges.toFixed(2)),
       Number(totals.salary_deduction.toFixed(2)), "",
     ];
@@ -258,6 +259,14 @@ export default function DialogMobileBillsPage() {
                 <th>Charges for Bill Period</th>
                 <th>VAT</th>
                 <th>Net Amount</th>
+                <th>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                    <span>Net − Credit Limit</span>
+                    <span style={{ fontSize: 10, fontWeight: 400, textTransform: "none", letterSpacing: "normal", opacity: 0.7 }}>
+                      (drives Need Approval)
+                    </span>
+                  </div>
+                </th>
                 <th>Bucket Cost</th>
                 <th>Total</th>
                 <th>VAS</th>
@@ -276,14 +285,14 @@ export default function DialogMobileBillsPage() {
             <tbody>
               {loadingSummary && (
                 <tr>
-                  <td colSpan={hasBreakdown ? 22 : 17} className="empty-row">
+                  <td colSpan={hasBreakdown ? 23 : 18} className="empty-row">
                     Loading…
                   </td>
                 </tr>
               )}
               {!loadingSummary && filteredRows.length === 0 && (
                 <tr>
-                  <td colSpan={hasBreakdown ? 22 : 17} className="empty-row">
+                  <td colSpan={hasBreakdown ? 23 : 18} className="empty-row">
                     No rows match.
                   </td>
                 </tr>
@@ -317,6 +326,15 @@ export default function DialogMobileBillsPage() {
                     <td className="mono">{money(row.charges_for_bill_period)}</td>
                     <td className="mono">{money(row.vat)}</td>
                     <td className="mono">{money(row.net_amount)}</td>
+                    <td
+                      className="mono"
+                      style={{
+                        color:
+                          Number(row.net_amount) - Number(row.credit_limit ?? 0) > 0 ? "var(--danger)" : "var(--success)",
+                      }}
+                    >
+                      {money(Number(row.net_amount) - Number(row.credit_limit ?? 0))}
+                    </td>
                     <td className="mono">
                       {money(row.bucket_cost)}
                       {row.is_bucket_excluded && <span className="pill pill-transferred" style={{ marginLeft: 6 }}>Excluded</span>}
@@ -365,6 +383,7 @@ export default function DialogMobileBillsPage() {
                   <td className="mono">{money(totals.charges_for_bill_period)}</td>
                   <td className="mono">{money(totals.vat)}</td>
                   <td className="mono">{money(totals.net_amount)}</td>
+                  <td></td>
                   <td className="mono">{money(totals.bucket_cost)}</td>
                   <td className="mono">{money(totals.total)}</td>
                   <td className="mono">{money(totals.vas)}</td>
