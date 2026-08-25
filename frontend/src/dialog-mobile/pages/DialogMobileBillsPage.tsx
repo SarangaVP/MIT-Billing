@@ -16,6 +16,7 @@ export default function DialogMobileBillsPage() {
   const [loadingSummary, setLoadingSummary] = useState(false);
   const [showUpload, setShowUpload] = useState(false);
   const [search, setSearch] = useState("");
+  const [approvalFilter, setApprovalFilter] = useState("");
   const [deletingPeriod, setDeletingPeriod] = useState<DialogMobileBillPeriod | null>(null);
   const [showBucketExclusionPanel, setShowBucketExclusionPanel] = useState(false);
   const [showBucketRatePanel, setShowBucketRatePanel] = useState(false);
@@ -94,6 +95,7 @@ export default function DialogMobileBillsPage() {
   }
 
   const filteredRows = summaryRows.filter((row) => {
+    if (approvalFilter && row.need_approval !== approvalFilter) return false;
     if (!search) return true;
     const pattern = search.toLowerCase();
     return (
@@ -102,6 +104,16 @@ export default function DialogMobileBillsPage() {
       (row.emp_no ?? "").toLowerCase().includes(pattern)
     );
   });
+
+  // Always the 4 standard values, plus any legacy free-text override
+  // actually present this month — so all 4 real statuses are always
+  // selectable, even in months where no one currently has, say,
+  // "Deducted from Salary" set.
+  const STANDARD_APPROVAL_STATUSES = ["OK", "Need Approval", "Manager approved", "Deducted from Salary"];
+  const approvalOptions = [
+    ...STANDARD_APPROVAL_STATUSES,
+    ...new Set(summaryRows.map((r) => r.need_approval).filter((v) => !STANDARD_APPROVAL_STATUSES.includes(v))),
+  ];
 
   const money = (v: string | number) => `Rs. ${Number(v).toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
   const hasBreakdown = summaryRows.some((r) => r.voice_rental !== null);
@@ -129,13 +141,14 @@ export default function DialogMobileBillsPage() {
   function handleExport() {
     if (!selectedPeriod) return;
     const headers = [
-      "Mobile No", "EMP No", "Name", "Project", "Total Usage Charges",
+      "Mobile No", "EMP No", "Name", "Credit Limit", "Project", "Total Usage Charges",
       ...(hasBreakdown ? ["Voice Rental", "Voice Usage", "SMS", "Data Rental", "Data Usage"] : []),
       "IDD", "Roaming", "Charges for Bill Period", "VAT", "Net Amount", "Bucket Cost", "Total",
-      "VAS", "Add To Bill Charges", "Salary Deduction", "Need Approval",
+      "VAS", "Add To Bill Charges", "Salary Deduction (VAS + Add To Bill Charges)", "Need Approval",
     ];
     const rows = filteredRows.map((row) => [
-      row.mobile_no, row.emp_no ?? "", row.name ?? "Unmatched number", row.project_label ?? "",
+      row.mobile_no, row.emp_no ?? "", row.name ?? "Unmatched number",
+      row.credit_limit != null ? Number(row.credit_limit) : "", row.project_label ?? "",
       Number(row.total_usage_charges),
       ...(hasBreakdown
         ? [
@@ -151,7 +164,7 @@ export default function DialogMobileBillsPage() {
       Number(row.vas), Number(row.add_to_bill_charges), Number(row.salary_deduction), row.need_approval,
     ]);
     const totalsRow = [
-      "Total", "", "", "", Number(totals.total_usage_charges.toFixed(2)),
+      "Total", "", "", "", "", Number(totals.total_usage_charges.toFixed(2)),
       ...(hasBreakdown
         ? [
             Number(totals.voice_rental.toFixed(2)), Number(totals.voice_usage.toFixed(2)), Number(totals.sms.toFixed(2)),
@@ -211,6 +224,14 @@ export default function DialogMobileBillsPage() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
+          <select value={approvalFilter} onChange={(e) => setApprovalFilter(e.target.value)}>
+            <option value="">All approval statuses</option>
+            {approvalOptions.map((status) => (
+              <option key={status} value={status}>
+                {status}
+              </option>
+            ))}
+          </select>
         </div>
 
         <div className="table-wrap">
@@ -220,6 +241,7 @@ export default function DialogMobileBillsPage() {
                 <th>Mobile No</th>
                 <th>EMP No</th>
                 <th>Name</th>
+                <th>Credit Limit</th>
                 <th>Project</th>
                 <th>Total Usage Charges</th>
                 {hasBreakdown && (
@@ -240,21 +262,28 @@ export default function DialogMobileBillsPage() {
                 <th>Total</th>
                 <th>VAS</th>
                 <th>Add To Bill Charges</th>
-                <th>Salary Deduction</th>
+                <th>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                    <span>Salary Deduction</span>
+                    <span style={{ fontSize: 10, fontWeight: 400, textTransform: "none", letterSpacing: "normal", opacity: 0.7 }}>
+                      (VAS + Add To Bill Charges)
+                    </span>
+                  </div>
+                </th>
                 <th>Need Approval</th>
               </tr>
             </thead>
             <tbody>
               {loadingSummary && (
                 <tr>
-                  <td colSpan={hasBreakdown ? 21 : 16} className="empty-row">
+                  <td colSpan={hasBreakdown ? 22 : 17} className="empty-row">
                     Loading…
                   </td>
                 </tr>
               )}
               {!loadingSummary && filteredRows.length === 0 && (
                 <tr>
-                  <td colSpan={hasBreakdown ? 21 : 16} className="empty-row">
+                  <td colSpan={hasBreakdown ? 22 : 17} className="empty-row">
                     No rows match.
                   </td>
                 </tr>
@@ -265,6 +294,7 @@ export default function DialogMobileBillsPage() {
                     <td className="mono">{row.mobile_no}</td>
                     <td className="mono">{row.emp_no || <span className="muted">—</span>}</td>
                     <td>{row.name || <span className="muted">Unmatched number</span>}</td>
+                    <td className="mono">{row.credit_limit != null ? money(row.credit_limit) : <span className="muted">—</span>}</td>
                     <td>
                       {row.project_label ? (
                         <span className="pill pill-transferred">{row.project_label}</span>
@@ -316,6 +346,7 @@ export default function DialogMobileBillsPage() {
               {!loadingSummary && filteredRows.length > 0 && (
                 <tr className="row-strong">
                   <td>Total</td>
+                  <td></td>
                   <td></td>
                   <td></td>
                   <td></td>
