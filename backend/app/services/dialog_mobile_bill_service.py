@@ -295,7 +295,10 @@ def _build_summary_rows(db: Session, line_items: list[DialogMobileBillLineItem],
             is_overridden = True
         else:
             credit_limit = employee.credit_limit if employee and employee.credit_limit is not None else Decimal("0")
-            need_approval = "OK" if net_amount <= credit_limit else "Need Approval"
+            # Compares against Total (Net Amount + Bucket Nett), not just
+            # Net Amount — the bucket portion is a real charge against the
+            # employee too, so it belongs in the credit check.
+            need_approval = "OK" if total <= credit_limit else "Need Approval"
             is_overridden = False
 
         results.append(DialogMobileBillSummaryRow(

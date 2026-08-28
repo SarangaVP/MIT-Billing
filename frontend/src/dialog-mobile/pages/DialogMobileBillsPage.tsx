@@ -193,7 +193,7 @@ export default function DialogMobileBillsPage() {
     const headers = [
       "Mobile No", "EMP No", "Name", "Credit Limit", "Project", "Total Usage Charges",
       ...(hasBreakdown ? ["Voice Rental", "Voice Usage", "SMS", "Data Rental", "Data Usage"] : []),
-      "IDD", "Roaming", "Charges for Bill Period", "VAT", "Net Amount", "Net - Credit Limit", "Bucket Cost", "Total",
+      "IDD", "Roaming", "Charges for Bill Period", "VAT", "Net Amount", "Total - Credit Limit", "Bucket Cost", "Total",
       "VAS", "Add To Bill Charges", "Late Payment Charges", "Salary Deduction (VAS + Add To Bill Charges)", "Need Approval",
     ];
     const rows = filteredRows.map((row) => [
@@ -210,7 +210,7 @@ export default function DialogMobileBillsPage() {
           ]
         : []),
       Number(row.idd), Number(row.roaming), Number(row.charges_for_bill_period), Number(row.vat),
-      Number(row.net_amount), Number(row.net_amount) - Number(row.credit_limit ?? 0),
+      Number(row.net_amount), Number(row.total) - Number(row.credit_limit ?? 0),
       Number(row.bucket_cost), Number(row.total),
       Number(row.vas), Number(row.add_to_bill_charges), Number(row.late_payment_charges),
       Number(row.salary_deduction), row.need_approval,
@@ -384,7 +384,7 @@ export default function DialogMobileBillsPage() {
                 <th>Net Amount</th>
                 <th>
                   <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                    <span>Net − Credit Limit</span>
+                    <span>Total − Credit Limit</span>
                     <span style={{ fontSize: 10, fontWeight: 400, textTransform: "none", letterSpacing: "normal", opacity: 0.7 }}>
                       (drives Need Approval)
                     </span>
@@ -454,10 +454,10 @@ export default function DialogMobileBillsPage() {
                       className="mono"
                       style={{
                         color:
-                          Number(row.net_amount) - Number(row.credit_limit ?? 0) > 0 ? "var(--danger)" : "var(--success)",
+                          Number(row.total) - Number(row.credit_limit ?? 0) > 0 ? "var(--danger)" : "var(--success)",
                       }}
                     >
-                      {money(Number(row.net_amount) - Number(row.credit_limit ?? 0))}
+                      {money(Number(row.total) - Number(row.credit_limit ?? 0))}
                     </td>
                     <td className="mono">
                       {money(row.bucket_cost)}
