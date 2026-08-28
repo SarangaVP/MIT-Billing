@@ -41,4 +41,15 @@ class DialogMobileBillPeriod(Base):
     bucket_cost_override = Column(Numeric(12, 2), nullable=True)
     bucket_vat_override = Column(Numeric(12, 2), nullable=True)
 
+    # The mobile number (within THIS bill period's line items) whose own
+    # Charges for Bill Period / VAT ARE the shared "data bucket" pool for
+    # the month — e.g. the "Data bucket" General line (765155535). When
+    # set, the standard bucket cost/VAT for every other eligible line item
+    # is derived automatically from this connection's own charges (see
+    # dialog_mobile_bill_service._build_summary_rows) instead of the manual
+    # bucket_cost_override/bucket_vat_override above. NULL means no data
+    # bucket number has been picked yet for this month, in which case the
+    # manual override (or Rs. 0) is used as before.
+    data_bucket_mobile_no = Column(String, nullable=True)
+
     created_at = Column(DateTime(timezone=True), server_default=func.now())

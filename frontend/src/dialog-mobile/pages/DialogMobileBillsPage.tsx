@@ -1,9 +1,10 @@
 import { useEffect, useState, useCallback } from "react";
 import type { DialogMobileBillPeriod, DialogMobileBillSummaryRow, DialogMobileLineItemChargeUpdateInput } from "../types/dialogMobile";
-import { listDialogMobileBillPeriods, getDialogMobileBillSummary, setDialogMobileApprovalOverride, setDialogMobileBucketExclusion, setDialogMobileBucketRateOverride, setDialogMobileLineItemCharges, deleteDialogMobileBillPeriod } from "../api/dialogMobile";
+import { listDialogMobileBillPeriods, getDialogMobileBillSummary, setDialogMobileApprovalOverride, setDialogMobileBucketExclusion, setDialogMobileBucketRateOverride, setDialogMobileDataBucketNumber, setDialogMobileLineItemCharges, deleteDialogMobileBillPeriod } from "../api/dialogMobile";
 import DialogMobileBillUploadPanel from "../components/DialogMobileBillUploadPanel";
 import DialogMobileBucketExclusionPanel from "../components/DialogMobileBucketExclusionPanel";
 import DialogMobileBucketRatePanel from "../components/DialogMobileBucketRatePanel";
+import DialogMobileDataBucketPanel from "../components/DialogMobileDataBucketPanel";
 import DialogMobileManageDataBucketPanel from "../components/DialogMobileManageDataBucketPanel";
 import DialogMobileConfirmPanel from "../components/DialogMobileConfirmPanel";
 import { exportTableToExcel } from "../../utils/exportTable";
@@ -21,6 +22,7 @@ export default function DialogMobileBillsPage() {
   const [deletingPeriod, setDeletingPeriod] = useState<DialogMobileBillPeriod | null>(null);
   const [showBucketExclusionPanel, setShowBucketExclusionPanel] = useState(false);
   const [showBucketRatePanel, setShowBucketRatePanel] = useState(false);
+  const [showDataBucketPanel, setShowDataBucketPanel] = useState(false);
   const [showManageDataBucketPanel, setShowManageDataBucketPanel] = useState(false);
   const [showBreakdown, setShowBreakdown] = useState(false);
 
@@ -53,13 +55,24 @@ export default function DialogMobileBillsPage() {
   }
 
   async function handleSetBucketExclusion(lineItemId: string, isBucketExcluded: boolean) {
-    const updated = await setDialogMobileBucketExclusion(lineItemId, { is_bucket_excluded: isBucketExcluded });
-    setSummaryRows((rows) => rows.map((r) => (r.bill_line_item_id === updated.bill_line_item_id ? updated : r)));
+    await setDialogMobileBucketExclusion(lineItemId, { is_bucket_excluded: isBucketExcluded });
+    // A single exclusion changes the eligible headcount for the whole
+    // bill period, which shifts everyone else's bucket_cost/bucket_vat
+    // too (whether split from an auto data bucket pool or not) — so the
+    // full summary needs refetching, not just the one row that changed.
+    if (selectedPeriod) {
+      setSummaryRows(await getDialogMobileBillSummary(selectedPeriod.id));
+    }
   }
 
   async function handleSetLineItemCharges(lineItemId: string, payload: DialogMobileLineItemChargeUpdateInput) {
-    const updated = await setDialogMobileLineItemCharges(lineItemId, payload);
-    setSummaryRows((rows) => rows.map((r) => (r.bill_line_item_id === updated.bill_line_item_id ? updated : r)));
+    await setDialogMobileLineItemCharges(lineItemId, payload);
+    // Editing charges can flip a connection's disconnected status (zero
+    // usage/charges either way), which shifts the eligible headcount for
+    // the whole bill period — same reasoning as bucket exclusion above.
+    if (selectedPeriod) {
+      setSummaryRows(await getDialogMobileBillSummary(selectedPeriod.id));
+    }
   }
 
   function handleOpenBucketRatePanel() {
@@ -82,6 +95,19 @@ export default function DialogMobileBillsPage() {
     if (refreshed) setSelectedPeriod(refreshed);
   }
 
+  async function handleSaveDataBucketNumber(mobileNo: string | null) {
+    if (!selectedPeriod) return;
+    const rows = await setDialogMobileDataBucketNumber(selectedPeriod.id, { data_bucket_mobile_no: mobileNo });
+    setSummaryRows(rows);
+    setShowDataBucketPanel(false);
+    // data_bucket_mobile_no lives on the bill period itself, so refresh it
+    // too — otherwise reopening this panel would show a stale selection.
+    const refreshedPeriods = await listDialogMobileBillPeriods();
+    setPeriods(refreshedPeriods);
+    const refreshed = refreshedPeriods.find((p) => p.id === selectedPeriod.id);
+    if (refreshed) setSelectedPeriod(refreshed);
+  }
+
   function approvalClass(value: string): string {
     if (value === "OK") return "approval-ok";
     if (value === "Need Approval") return "approval-attention";
@@ -96,7 +122,13 @@ export default function DialogMobileBillsPage() {
     loadPeriods();
   }
 
-  const filteredRows = summaryRows.filter((row) => {
+  // The connection currently picked as the data bucket number — pulled out
+  // of the normal table/sums entirely and rendered as its own row after
+  // the Total row instead (see below).
+  const dataBucketRow = summaryRows.find((r) => r.is_data_bucket_line) || null;
+  const normalRows = summaryRows.filter((r) => !r.is_data_bucket_line);
+
+  const filteredRows = normalRows.filter((row) => {
     if (approvalFilter && row.need_approval !== approvalFilter) return false;
     if (!search) return true;
     const pattern = search.toLowerCase();
@@ -114,17 +146,18 @@ export default function DialogMobileBillsPage() {
   const STANDARD_APPROVAL_STATUSES = ["OK", "Need Approval", "Manager approved", "Deducted from Salary"];
   const approvalOptions = [
     ...STANDARD_APPROVAL_STATUSES,
-    ...new Set(summaryRows.map((r) => r.need_approval).filter((v) => !STANDARD_APPROVAL_STATUSES.includes(v))),
+    ...new Set(normalRows.map((r) => r.need_approval).filter((v) => !STANDARD_APPROVAL_STATUSES.includes(v))),
   ];
 
   const money = (v: string | number) => `Rs. ${Number(v).toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
-  const hasBreakdown = summaryRows.some((r) => r.voice_rental !== null);
+  const hasBreakdown = normalRows.some((r) => r.voice_rental !== null);
 
   // Groups every connection's Total by LOB, same pattern as Mobitel/Dialog
   // Data's own Team Cost breakdown — Dialog Mobile has no separate LOB
-  // code field, so that column is always blank here.
+  // code field, so that column is always blank here. The data bucket
+  // number is excluded (it's not a normal employee's cost).
   const teamCostRows = Object.entries(
-    summaryRows.reduce<Record<string, number>>((acc, row) => {
+    normalRows.reduce<Record<string, number>>((acc, row) => {
       const team = row.lob || "Unassigned";
       acc[team] = (acc[team] || 0) + Number(row.total);
       return acc;
@@ -221,8 +254,11 @@ export default function DialogMobileBillsPage() {
             </p>
           </div>
           <div style={{ display: "flex", gap: 8 }}>
+            <button className="btn btn-ghost" onClick={() => setShowDataBucketPanel(true)}>
+              {dataBucketRow ? "Change data bucket number" : "Select data bucket number"}
+            </button>
             <button className="btn btn-ghost" onClick={handleOpenBucketRatePanel}>
-              Set bucket rate
+              Set bucket rate manually
             </button>
             <button className="btn btn-ghost" onClick={() => setShowBucketExclusionPanel(true)}>
               Manage bucket exclusion
@@ -238,6 +274,31 @@ export default function DialogMobileBillsPage() {
             </button>
           </div>
         </div>
+
+        {summaryRows.length > 0 && (
+          <div
+            className="table-wrap"
+            style={{ marginBottom: 20, padding: "10px 16px", display: "flex", gap: 24, flexWrap: "wrap", alignItems: "baseline" }}
+          >
+            <span>
+              <strong>{summaryRows[0].eligible_employee_count}</strong> <span className="muted">eligible employees this month</span>
+            </span>
+            <span>
+              <span className="muted">Bucket Nett</span> <strong className="mono">{money(summaryRows[0].standard_bucket_nett)}</strong>
+            </span>
+            <span>
+              <span className="muted">Bucket VAT</span> <strong className="mono">{money(summaryRows[0].standard_bucket_vat)}</strong>
+            </span>
+            <span>
+              <span className="muted">Bucket Cost</span> <strong className="mono">{money(summaryRows[0].standard_bucket_cost)}</strong>
+            </span>
+            <span className="field-hint" style={{ margin: 0 }}>
+              {dataBucketRow
+                ? "per eligible employee, split from the selected data bucket connection"
+                : "per eligible employee, from the manual bucket rate"}
+            </span>
+          </div>
+        )}
 
         {showBreakdown && (
           <div className="table-wrap" style={{ maxWidth: 460, marginBottom: 20 }}>
@@ -457,13 +518,50 @@ export default function DialogMobileBillsPage() {
                   <td></td>
                 </tr>
               )}
+              {!loadingSummary && dataBucketRow && (
+                <tr className="row-strong" style={{ opacity: 0.9 }}>
+                  <td className="mono">{dataBucketRow.mobile_no}</td>
+                  <td className="mono">{dataBucketRow.emp_no || <span className="muted">—</span>}</td>
+                  <td>
+                    <span className="pill pill-transferred">Data Bucket</span> {dataBucketRow.name}
+                  </td>
+                  <td></td>
+                  <td></td>
+                  <td className="mono">{money(dataBucketRow.total_usage_charges)}</td>
+                  {hasBreakdown && (
+                    <>
+                      <td className="mono">{dataBucketRow.voice_rental != null ? money(Number(dataBucketRow.voice_rental)) : "—"}</td>
+                      <td className="mono">{dataBucketRow.voice_usage != null ? money(Number(dataBucketRow.voice_usage)) : "—"}</td>
+                      <td className="mono">{dataBucketRow.sms != null ? money(Number(dataBucketRow.sms)) : "—"}</td>
+                      <td className="mono">{dataBucketRow.data_rental != null ? money(Number(dataBucketRow.data_rental)) : "—"}</td>
+                      <td className="mono">{dataBucketRow.data_usage != null ? money(Number(dataBucketRow.data_usage)) : "—"}</td>
+                    </>
+                  )}
+                  <td className="mono">{money(dataBucketRow.idd)}</td>
+                  <td className="mono">{money(dataBucketRow.roaming)}</td>
+                  <td className="mono">{money(dataBucketRow.charges_for_bill_period)}</td>
+                  <td className="mono">{money(dataBucketRow.vat)}</td>
+                  <td></td>
+                  <td></td>
+                  <td className="mono">
+                    {money(dataBucketRow.bucket_cost)}
+                    <span className="pill pill-transferred" style={{ marginLeft: 6 }}>Excluded</span>
+                  </td>
+                  <td></td>
+                  <td className="mono">{Number(dataBucketRow.vas) > 0 ? money(dataBucketRow.vas) : "—"}</td>
+                  <td className="mono">{Number(dataBucketRow.add_to_bill_charges) > 0 ? money(dataBucketRow.add_to_bill_charges) : "—"}</td>
+                  <td className="mono">{Number(dataBucketRow.late_payment_charges) > 0 ? money(dataBucketRow.late_payment_charges) : "—"}</td>
+                  <td></td>
+                  <td></td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
 
         {showBucketExclusionPanel && (
           <DialogMobileBucketExclusionPanel
-            rows={summaryRows}
+            rows={normalRows}
             onSave={handleSetBucketExclusion}
             onCancel={() => setShowBucketExclusionPanel(false)}
           />
@@ -471,7 +569,7 @@ export default function DialogMobileBillsPage() {
 
         {showManageDataBucketPanel && (
           <DialogMobileManageDataBucketPanel
-            rows={summaryRows}
+            rows={normalRows}
             onSave={handleSetLineItemCharges}
             onCancel={() => setShowManageDataBucketPanel(false)}
           />
@@ -484,6 +582,16 @@ export default function DialogMobileBillsPage() {
             currentOverrideVat={selectedPeriod.bucket_vat_override}
             onSave={handleSaveBucketRate}
             onCancel={() => setShowBucketRatePanel(false)}
+          />
+        )}
+
+        {showDataBucketPanel && (
+          <DialogMobileDataBucketPanel
+            periodLabel={selectedPeriod.label}
+            rows={summaryRows}
+            currentMobileNo={selectedPeriod.data_bucket_mobile_no}
+            onSave={handleSaveDataBucketNumber}
+            onCancel={() => setShowDataBucketPanel(false)}
           />
         )}
       </div>

@@ -10,7 +10,7 @@ from app.database import get_db
 from app.schemas.dialog_mobile_bill import (
     DialogMobileImportResult, DialogMobileBillSummaryRow, DialogMobileApprovalOverrideInput,
     DialogMobileBucketExclusionInput, DialogMobileBucketRateOverrideInput, DialogMobileLineItemChargeUpdateInput,
-    DialogMobileBillPeriodOut,
+    DialogMobileBillPeriodOut, DialogMobileDataBucketSelectionInput,
 )
 from app.services import dialog_mobile_bill_service
 
@@ -81,6 +81,16 @@ def set_bucket_rate_override(bill_period_id: uuid.UUID, payload: DialogMobileBuc
 @router.put("/line-items/{line_item_id}/bucket-exclusion", response_model=DialogMobileBillSummaryRow)
 def set_bucket_exclusion(line_item_id: uuid.UUID, payload: DialogMobileBucketExclusionInput, db: Session = Depends(get_db)):
     return dialog_mobile_bill_service.set_bucket_exclusion(db, line_item_id, payload.is_bucket_excluded)
+
+
+@router.put("/{bill_period_id}/data-bucket-number", response_model=list[DialogMobileBillSummaryRow])
+def set_data_bucket_number(bill_period_id: uuid.UUID, payload: DialogMobileDataBucketSelectionInput, db: Session = Depends(get_db)):
+    """
+    Selects (or clears, if data_bucket_mobile_no is null) the connection
+    whose own charges become the automatically-split bucket pool for this
+    bill period — replaces manually typing a rate via bucket-rate-override.
+    """
+    return dialog_mobile_bill_service.set_data_bucket_number(db, bill_period_id, payload.data_bucket_mobile_no)
 
 
 @router.put("/line-items/{line_item_id}/charges", response_model=DialogMobileBillSummaryRow)

@@ -83,6 +83,7 @@ export interface DialogMobileBillPeriod {
   reconciliation_discrepancy: string | null;
   bucket_cost_override: string | null;
   bucket_vat_override: string | null;
+  data_bucket_mobile_no: string | null;
   created_at: string;
 }
 
@@ -136,6 +137,11 @@ export interface DialogMobileBillSummaryRow {
   is_overridden: boolean;
   is_general_line: boolean;
   is_bucket_excluded: boolean;
+  is_data_bucket_line: boolean;
+  eligible_employee_count: number;
+  standard_bucket_cost: string;
+  standard_bucket_vat: string;
+  standard_bucket_nett: string;
 }
 
 export interface DialogMobileApprovalOverrideInput {
@@ -149,6 +155,10 @@ export interface DialogMobileBucketExclusionInput {
 export interface DialogMobileBucketRateOverrideInput {
   bucket_cost_override: number | null;
   bucket_vat_override: number | null;
+}
+
+export interface DialogMobileDataBucketSelectionInput {
+  data_bucket_mobile_no: string | null;
 }
 
 export interface DialogMobileLineItemChargeUpdateInput {

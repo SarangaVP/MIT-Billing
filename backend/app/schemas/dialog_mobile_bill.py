@@ -19,6 +19,7 @@ class DialogMobileBillPeriodOut(BaseModel):
     reconciliation_discrepancy: Decimal | None
     bucket_cost_override: Decimal | None
     bucket_vat_override: Decimal | None
+    data_bucket_mobile_no: str | None
     created_at: datetime
 
     model_config = {"from_attributes": True}
@@ -26,9 +27,20 @@ class DialogMobileBillPeriodOut(BaseModel):
 
 class DialogMobileBucketRateOverrideInput(BaseModel):
     # Both null clears the override, reverting this bill period back to
-    # whatever rate is active in the standard rate table.
+    # whatever rate is active in the standard rate table. Only used as a
+    # fallback when no data_bucket_mobile_no has been selected — see
+    # DialogMobileDataBucketSelectionInput below, which is the normal path now.
     bucket_cost_override: Decimal | None = None
     bucket_vat_override: Decimal | None = None
+
+
+class DialogMobileDataBucketSelectionInput(BaseModel):
+    # The mobile number (must belong to a line item already in THIS bill
+    # period) whose own Charges for Bill Period / VAT become the shared
+    # pool that everyone else's bucket cost/VAT is automatically split
+    # from. Null clears the selection, reverting to the manual
+    # bucket_cost_override/bucket_vat_override behavior for this month.
+    data_bucket_mobile_no: str | None = None
 
 
 class DialogMobileImportResult(BaseModel):
@@ -113,3 +125,21 @@ class DialogMobileBillSummaryRow(BaseModel):
     is_overridden: bool
     is_general_line: bool
     is_bucket_excluded: bool
+    # True only for the one line item currently selected as this bill
+    # period's "data bucket number" — the frontend pulls this row out of
+    # the normal table/sum entirely and renders it as its own row after
+    # the Total row instead. Its bucket_cost/bucket_vat/bucket_nett are
+    # zero here (it's excluded, same as any other excluded connection) —
+    # the pool amounts are its own charges_for_bill_period/vat fields.
+    is_data_bucket_line: bool
+
+    # Bill-period-level figures, duplicated on every row for convenience
+    # (identical across the whole bill period) so the frontend can show a
+    # one-line summary without a second request: how many connections are
+    # actually splitting the bucket this month, and the resulting
+    # per-employee Nett/VAT/Cost breakdown that standard_bucket_cost above
+    # is built from.
+    eligible_employee_count: int
+    standard_bucket_cost: Decimal
+    standard_bucket_vat: Decimal
+    standard_bucket_nett: Decimal

@@ -23,6 +23,14 @@ from app.schemas.dialog_mobile_bill import (
 )
 
 
+def _is_disconnected_this_month(li: DialogMobileBillLineItem) -> bool:
+    return li.total_usage_charges == 0 and li.charges_for_bill_period == 0
+
+
+def _is_intern(li: DialogMobileBillLineItem, employee: DialogMobileEmployee | None) -> bool:
+    return bool(employee and employee.cadre and employee.cadre.strip().lower() == "intern")
+
+
 def _parse_date(value: str | None, fmt: str) -> date | None:
     if not value:
         return None
@@ -154,18 +162,19 @@ def get_summary_row_for_line_item(db: Session, line_item_id: uuid.UUID) -> Dialo
     if not line_item:
         raise HTTPException(status_code=404, detail="Bill line item not found")
     period = get_bill_period(db, line_item.bill_period_id)
-    rows = _build_summary_rows(db, [line_item], bill_period=period)
-    return rows[0]
+    # IMPORTANT: must build the summary from EVERY line item in this bill
+    # period, not just the one that changed — the eligible headcount, the
+    # data bucket pool lookup, and the resulting standard_bucket_cost/vat
+    # all depend on seeing every other connection too. Passing only
+    # [line_item] here would silently compute those against a list of
+    # length 1, giving a wrong bucket_cost the moment a data bucket number
+    # is active.
+    all_line_items = db.query(DialogMobileBillLineItem).filter(DialogMobileBillLineItem.bill_period_id == period.id).all()
+    rows = _build_summary_rows(db, all_line_items, bill_period=period)
+    return next(r for r in rows if r.bill_line_item_id == line_item_id)
 
 
 def _build_summary_rows(db: Session, line_items: list[DialogMobileBillLineItem], bill_period: DialogMobileBillPeriod) -> list[DialogMobileBillSummaryRow]:
-    # There is no standard/fallback bucket rate anymore — every bill period
-    # requires an explicit "Set bucket rate" override (set via the Bills
-    # page for that specific month). Until someone sets one, the bucket
-    # cost/VAT for that month is simply zero.
-    standard_bucket_cost = bill_period.bucket_cost_override or Decimal("0")
-    standard_bucket_vat = bill_period.bucket_vat_override or Decimal("0")
-
     mobile_nos = [li.mobile_no for li in line_items]
     number_rows = (
         db.query(DialogMobileMobileNumber, DialogMobileEmployee)
@@ -178,6 +187,56 @@ def _build_summary_rows(db: Session, line_items: list[DialogMobileBillLineItem],
     # — the dict above only kept the Employee half of the join, so this was
     # previously discarded entirely and had no way to reach the summary row.
     project_label_by_mobile = {mn.mobile_no: mn.project_label for mn, emp in number_rows}
+
+    # The "data bucket number" — a specific connection (e.g. the "Data
+    # bucket" General line) whose own Charges for Bill Period / VAT ARE the
+    # shared pool for the month. When one is selected for this bill period,
+    # the standard bucket cost/VAT is derived automatically from it instead
+    # of a manually typed rate.
+    data_bucket_li = None
+    if bill_period.data_bucket_mobile_no:
+        data_bucket_li = next(
+            (li for li in line_items if li.mobile_no == bill_period.data_bucket_mobile_no), None
+        )
+
+    if data_bucket_li is not None:
+        # Everyone eligible for the bucket EXCEPT the data bucket
+        # connection itself — it's the source of the pool, not a
+        # recipient, so it must never be counted in its own denominator.
+        eligible_count = sum(
+            1
+            for li in line_items
+            if li.id != data_bucket_li.id
+            and not _is_disconnected_this_month(li)
+            and not _is_intern(li, employee_by_mobile.get(li.mobile_no))
+            and not li.is_bucket_excluded
+        )
+        if eligible_count > 0:
+            standard_bucket_vat = data_bucket_li.vat / eligible_count
+            standard_bucket_nett = (data_bucket_li.charges_for_bill_period - data_bucket_li.vat) / eligible_count
+            standard_bucket_cost = standard_bucket_nett + standard_bucket_vat
+        else:
+            # No eligible employees to split the pool across this month —
+            # nothing to allocate.
+            standard_bucket_cost = Decimal("0")
+            standard_bucket_vat = Decimal("0")
+            standard_bucket_nett = Decimal("0")
+    else:
+        # No data bucket number selected yet — fall back to the manual
+        # per-bill-period override (or Rs. 0 if that was never set either).
+        # Still compute eligible_count for display purposes (how many
+        # connections are currently receiving this flat rate), even though
+        # it plays no role in a manually-typed rate's own value.
+        eligible_count = sum(
+            1
+            for li in line_items
+            if not _is_disconnected_this_month(li)
+            and not _is_intern(li, employee_by_mobile.get(li.mobile_no))
+            and not li.is_bucket_excluded
+        )
+        standard_bucket_cost = bill_period.bucket_cost_override or Decimal("0")
+        standard_bucket_vat = bill_period.bucket_vat_override or Decimal("0")
+        standard_bucket_nett = standard_bucket_cost - standard_bucket_vat
 
     results = []
     for li in line_items:
@@ -192,7 +251,7 @@ def _build_summary_rows(db: Session, line_items: list[DialogMobileBillLineItem],
         # disconnected number — this is a real signal already present in
         # the bill itself, not something requiring any external status
         # tracking.
-        is_disconnected_this_month = li.total_usage_charges == 0 and li.charges_for_bill_period == 0
+        is_disconnected_this_month = _is_disconnected_this_month(li)
 
         # Confirmed against a SEPARATE real bill: Interns never get the
         # bucket allocation, even with substantial real usage that
@@ -200,16 +259,22 @@ def _build_summary_rows(db: Session, line_items: list[DialogMobileBillLineItem],
         # either direction. Unlike disconnection, this genuinely can't be
         # inferred from usage — it's tied to cadre, which we already
         # store on the employee.
-        is_intern = bool(employee and employee.cadre and employee.cadre.strip().lower() == "intern")
+        is_intern = _is_intern(li, employee)
         is_general_line = bool(employee and employee.is_general_line)
+        is_data_bucket_line = data_bucket_li is not None and li.id == data_bucket_li.id
 
-        # General lines are NO LONGER auto-excluded from the bucket just
-        # for being a General line — that's now a deliberate per-month
-        # decision (li.is_bucket_excluded, set via "Manage bucket
-        # exclusion" in the UI), since not every General line should
-        # necessarily be excluded every single month. Disconnection and
-        # Intern status remain fully automatic.
+        # The data bucket connection itself is a bucket-excluded number —
+        # it's the SOURCE of the pool, not a recipient of it, so it gets
+        # zero bucket cost/VAT just like any other excluded connection
+        # (is_bucket_excluded is set to True automatically for it in
+        # set_data_bucket_number). No special-casing needed here.
         if is_disconnected_this_month or is_intern or li.is_bucket_excluded:
+            # General lines are NO LONGER auto-excluded from the bucket
+            # just for being a General line — that's now a deliberate
+            # per-month decision (li.is_bucket_excluded, set via "Manage
+            # bucket exclusion" in the UI, and also set automatically for
+            # whichever connection is chosen as the data bucket number
+            # itself). Disconnection and Intern status remain fully automatic.
             bucket_cost = Decimal("0")
             bucket_vat = Decimal("0")
         else:
@@ -267,6 +332,11 @@ def _build_summary_rows(db: Session, line_items: list[DialogMobileBillLineItem],
             is_overridden=is_overridden,
             is_general_line=is_general_line,
             is_bucket_excluded=li.is_bucket_excluded,
+            is_data_bucket_line=is_data_bucket_line,
+            eligible_employee_count=eligible_count,
+            standard_bucket_cost=standard_bucket_cost,
+            standard_bucket_vat=standard_bucket_vat,
+            standard_bucket_nett=standard_bucket_nett,
         ))
 
     return results
@@ -341,3 +411,54 @@ def set_bucket_exclusion(db: Session, line_item_id: uuid.UUID, is_bucket_exclude
     db.commit()
     db.refresh(line_item)
     return get_summary_row_for_line_item(db, line_item_id)
+
+
+def set_data_bucket_number(db: Session, bill_period_id: uuid.UUID, mobile_no: str | None) -> list[DialogMobileBillSummaryRow]:
+    """
+    Picks (or clears, if mobile_no is None) the connection whose own
+    Charges for Bill Period / VAT should be treated as the shared "data
+    bucket" pool for THIS bill period — replacing the manual "Set bucket
+    rate" entry with an automatic calculation. The chosen connection:
+      - is marked is_bucket_excluded so it's dropped out of the normal
+        bucket allocation and headcount (it's the source of the pool, not
+        a recipient of it)
+      - is identified via is_data_bucket_line on the summary row so the
+        frontend can pull it out of the main table/sum entirely and show
+        it as its own row after the Total row instead (with bucket_cost/
+        bucket_vat/bucket_nett all zero on that row, same as any other
+        excluded connection — the pool figures come from its own
+        charges_for_bill_period/vat fields, not its bucket_cost).
+    Switching to a different number (or clearing the selection) un-marks
+    whichever connection was previously selected, so it falls back into
+    the normal bucket allocation for this month.
+    """
+    period = get_bill_period(db, bill_period_id)
+
+    if period.data_bucket_mobile_no and period.data_bucket_mobile_no != mobile_no:
+        previous = (
+            db.query(DialogMobileBillLineItem)
+            .filter(
+                DialogMobileBillLineItem.bill_period_id == period.id,
+                DialogMobileBillLineItem.mobile_no == period.data_bucket_mobile_no,
+            )
+            .first()
+        )
+        if previous:
+            previous.is_bucket_excluded = False
+
+    if mobile_no:
+        new_line_item = (
+            db.query(DialogMobileBillLineItem)
+            .filter(
+                DialogMobileBillLineItem.bill_period_id == period.id,
+                DialogMobileBillLineItem.mobile_no == mobile_no,
+            )
+            .first()
+        )
+        if not new_line_item:
+            raise HTTPException(status_code=404, detail=f"No line item found for mobile number {mobile_no} in this bill period")
+        new_line_item.is_bucket_excluded = True
+
+    period.data_bucket_mobile_no = mobile_no
+    db.commit()
+    return get_summary(db, bill_period_id)
