@@ -124,6 +124,7 @@ export interface DialogMobileBillSummaryRow {
   charges_for_bill_period: string;
   vat: string;
   add_to_bill_charges: string;
+  late_payment_charges: string;
 
   net_amount: string;
   bucket_cost: string;

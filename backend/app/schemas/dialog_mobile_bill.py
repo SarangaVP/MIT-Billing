@@ -101,6 +101,7 @@ class DialogMobileBillSummaryRow(BaseModel):
     charges_for_bill_period: Decimal
     vat: Decimal
     add_to_bill_charges: Decimal
+    late_payment_charges: Decimal
 
     net_amount: Decimal
     bucket_cost: Decimal
