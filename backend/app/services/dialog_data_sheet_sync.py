@@ -131,6 +131,18 @@ def sync_dialog_data_sheet(db: Session, xlsx_path: str) -> dict:
             continue
 
         connection_no_clean, emp_no_clean, name_clean, team_clean = clean(connection_no), clean(emp_no), clean(name), clean(team)
+
+        # Some rows in the real sheet have the literal text "No" typed into
+        # the Connection No column — meaning "this employee has no
+        # connection assigned" rather than an actual connection number.
+        # Confirmed by a real crash: two different employees both had the
+        # literal string "No" here, and since it isn't empty it was being
+        # treated as if it were one real, shared connection identifier,
+        # violating the unique constraint on the second insert. Treat it
+        # as missing, same as blank/0/#N/A are treated elsewhere in this file.
+        if isinstance(connection_no_clean, str) and connection_no_clean.strip().lower() == "no":
+            connection_no_clean = None
+
         if not connection_no_clean or not emp_no_clean or not name_clean:
             skipped_missing += 1
             continue
