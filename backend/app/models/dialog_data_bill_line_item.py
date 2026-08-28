@@ -22,6 +22,22 @@ class DialogDataBillLineItem(Base):
 
     cost = Column(Numeric(12, 2), nullable=False)
 
+    # Frozen copy of who this connection was billed to AT IMPORT TIME —
+    # deliberately NOT looked up live via connection -> employee at read
+    # time. A connection's employee_id can be reassigned later (an EMP No
+    # collision resolved via the Master sheet sync, an employee genuinely
+    # transferring a number to someone else) — without this snapshot, that
+    # reassignment would silently rewrite who every past bill appears to
+    # have been billed to, which is wrong for a billing history. These 4
+    # fields are the source of truth for display from the moment the bill
+    # is created; connection_no is included too so a bill still displays
+    # correctly even if a connection is later soft-deleted.
+    connection_no_snapshot = Column(String, nullable=True)
+    emp_no_snapshot = Column(String, nullable=True)
+    name_snapshot = Column(String, nullable=True)
+    team_snapshot = Column(String, nullable=True)
+    lob_code_snapshot = Column(String, nullable=True)
+
     # A manually-set project cost, used when someone's real charge for the
     # month is a specific known amount rather than an equal share of the
     # bucket — same concept and behavior as Mobitel's project cost. When

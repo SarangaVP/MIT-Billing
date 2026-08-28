@@ -62,8 +62,8 @@ def import_dialog_data_bill(
     period_start = datetime.strptime(parsed["period_start"], "%d/%m/%Y").date() if parsed["period_start"] else None
     period_end = datetime.strptime(parsed["period_end"], "%d/%m/%Y").date() if parsed["period_end"] else None
 
-    active_connections = (
-        db.query(DialogDataConnection)
+    active_connections_with_employee = (
+        db.query(DialogDataConnection, DialogDataEmployee)
         .join(DialogDataEmployee, DialogDataEmployee.id == DialogDataConnection.employee_id)
         .filter(
             DialogDataConnection.status == DialogDataConnectionStatus.active,
@@ -82,11 +82,13 @@ def import_dialog_data_bill(
         # our roster's blanket "active" status alone overcounts; restrict
         # to the intersection of "active in our roster" AND "actually
         # billed this month per the Bill sheet".
-        our_connection_nos = {c.connection_no for c in active_connections}
-        active_connections = [c for c in active_connections if c.connection_no in usage_data]
+        our_connection_nos = {c.connection_no for c, e in active_connections_with_employee}
+        active_connections_with_employee = [
+            (c, e) for c, e in active_connections_with_employee if c.connection_no in usage_data
+        ]
         unmatched_in_bill_sheet = sorted(set(usage_data.keys()) - our_connection_nos)
 
-    users = len(active_connections)
+    users = len(active_connections_with_employee)
     if users == 0:
         raise HTTPException(status_code=422, detail="No active Dialog Data Bucket connections to split this bill across")
 
@@ -112,16 +114,24 @@ def import_dialog_data_bill(
     db.flush()
 
     line_total = Decimal("0")
-    for connection in active_connections:
+    for connection, employee in active_connections_with_employee:
         cost = per_user_cost.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
         line_total += cost
 
         usage = usage_data.get(connection.connection_no, {})
 
+        # Snapshot the employee identity NOW, at import time — see the
+        # model's comment on why this is never re-derived from a live
+        # join later.
         db.add(DialogDataBillLineItem(
             bill_period_id=bill_period.id,
             connection_id=connection.id,
             cost=cost,
+            connection_no_snapshot=connection.connection_no,
+            emp_no_snapshot=employee.emp_no if employee else None,
+            name_snapshot=employee.name if employee else None,
+            team_snapshot=employee.team if employee else None,
+            lob_code_snapshot=employee.lob_code if employee else None,
             allocation_gb=usage.get("allocation_gb"),
             usage_gb=usage.get("usage_gb"),
             remaining_gb=usage.get("remaining_gb"),
@@ -172,23 +182,28 @@ def delete_bill_period(db: Session, bill_period_id: uuid.UUID) -> None:
 
 def get_summary(db: Session, bill_period_id: uuid.UUID) -> list[dict]:
     get_bill_period(db, bill_period_id)
-    rows = (
-        db.query(DialogDataBillLineItem, DialogDataConnection, DialogDataEmployee)
-        .join(DialogDataConnection, DialogDataConnection.id == DialogDataBillLineItem.connection_id)
-        .join(DialogDataEmployee, DialogDataEmployee.id == DialogDataConnection.employee_id)
+    # Reads the frozen snapshot fields on each line item — NOT a live join
+    # to DialogDataConnection/DialogDataEmployee. This is deliberate: a
+    # connection's employee_id can be reassigned later (Master sheet sync
+    # resolving an EMP No conflict, an employee transferring their number
+    # to someone else), and this bill must keep showing who it was
+    # actually billed to at the time it was created, regardless of any
+    # later reassignment. See the model's comment for the full reasoning.
+    items = (
+        db.query(DialogDataBillLineItem)
         .filter(DialogDataBillLineItem.bill_period_id == bill_period_id)
-        .order_by(DialogDataEmployee.name)
+        .order_by(DialogDataBillLineItem.name_snapshot)
         .all()
     )
     return [
         {
             "id": li.id,
             "connection_id": li.connection_id,
-            "emp_no": emp.emp_no,
-            "name": emp.name,
-            "team": emp.team,
-            "lob_code": emp.lob_code,
-            "connection_no": conn.connection_no,
+            "emp_no": li.emp_no_snapshot,
+            "name": li.name_snapshot,
+            "team": li.team_snapshot,
+            "lob_code": li.lob_code_snapshot,
+            "connection_no": li.connection_no_snapshot,
             "cost": li.cost,
             "is_project_cost": li.is_project_cost,
             "project_cost_amount": li.project_cost_amount,
@@ -198,7 +213,7 @@ def get_summary(db: Session, bill_period_id: uuid.UUID) -> list[dict]:
             "pay_go_status": li.pay_go_status,
             "bill_cycle": li.bill_cycle,
         }
-        for li, conn, emp in rows
+        for li in items
     ]
 
 

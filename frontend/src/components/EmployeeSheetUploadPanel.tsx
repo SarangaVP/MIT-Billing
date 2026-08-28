@@ -6,7 +6,14 @@ interface SyncResult {
   revived_employees: number;
   retired_employees: number;
   skipped_missing_rows: number;
-  conflicts: string[];
+  // Dialog Mobile / Mobitel: numbers that COULDN'T be applied automatically
+  // (still claimed by someone else) — needs a manual decision.
+  conflicts?: string[];
+  // Dialog Data Bucket: connections that WERE auto-transferred to a new
+  // employee this upload, since the sheet showed a different owner. Past
+  // bills are unaffected (they read a frozen snapshot, not this live
+  // employee_id) — only future bill imports reflect the transfer.
+  transfers?: string[];
   [key: string]: unknown;   // covers module-specific fields (numbers_added vs connections_added, etc.)
 }
 
@@ -45,6 +52,7 @@ export default function EmployeeSheetUploadPanel({ title, uploadFn, onImported, 
   const connectionsAddedKey = ["connections_added", "numbers_added"].find((k) => result && k in result);
   const connectionsRetiredKey = ["connections_retired", "numbers_retired"].find((k) => result && k in result);
   const connectionsReactivatedKey = ["connections_reactivated", "numbers_reactivated"].find((k) => result && k in result);
+  const connectionsTransferredKey = ["connections_transferred"].find((k) => result && k in result);
 
   return (
     <div className="panel-overlay" onClick={onCancel}>
@@ -109,6 +117,12 @@ export default function EmployeeSheetUploadPanel({ title, uploadFn, onImported, 
                 <span className="mono">{result[connectionsReactivatedKey] as number}</span>
               </div>
             )}
+            {connectionsTransferredKey && (result[connectionsTransferredKey] as number) > 0 && (
+              <div className="inline-row">
+                <span>Numbers transferred to a new employee</span>
+                <span className="mono">{result[connectionsTransferredKey] as number}</span>
+              </div>
+            )}
             {result.skipped_missing_rows > 0 && (
               <div className="inline-row">
                 <span>Skipped (blank rows)</span>
@@ -118,13 +132,27 @@ export default function EmployeeSheetUploadPanel({ title, uploadFn, onImported, 
           </div>
         )}
 
-        {result && result.conflicts.length > 0 && (
+        {result && result.conflicts && result.conflicts.length > 0 && (
           <div className="banner banner-error">
             {result.conflicts.length} conflict{result.conflicts.length > 1 ? "s" : ""} — these were NOT applied
             automatically, since a number/connection appears to belong to someone else already:
             <ul style={{ margin: "8px 0 0", paddingLeft: 18 }}>
               {result.conflicts.map((c, i) => (
                 <li key={i}>{c}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {result && result.transfers && result.transfers.length > 0 && (
+          <div className="banner banner-success">
+            {result.transfers.length} number{result.transfers.length > 1 ? "s" : ""} automatically transferred to a
+            new employee, since this sheet shows a different owner than before. Bills already imported are
+            unaffected — they keep showing the employee they were actually billed to at the time; only bills
+            imported from now on will reflect this:
+            <ul style={{ margin: "8px 0 0", paddingLeft: 18 }}>
+              {result.transfers.map((t, i) => (
+                <li key={i}>{t}</li>
               ))}
             </ul>
           </div>
