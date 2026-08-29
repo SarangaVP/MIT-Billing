@@ -308,7 +308,7 @@ export default function DialogMobileBillsPage() {
               )}
             </p>
           </div>
-          <div style={{ display: "flex", gap: 8 }}>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end", minWidth: 0, rowGap: 10 }}>
             <button className="btn btn-ghost" onClick={() => setShowDataBucketPanel(true)}>
               {dataBucketRow ? "Change data bucket number" : "Select data bucket number"}
             </button>
