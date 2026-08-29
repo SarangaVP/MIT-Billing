@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import type { DialogMobileBillPeriod, DialogMobileBillSummaryRow, DialogMobileLineItemChargeUpdateInput } from "../types/dialogMobile";
-import { listDialogMobileBillPeriods, getDialogMobileBillSummary, setDialogMobileApprovalOverride, setDialogMobileBucketExclusion, setDialogMobileBucketRateOverride, setDialogMobileDataBucketNumber, setDialogMobileLineItemCharges, deleteDialogMobileBillPeriod } from "../api/dialogMobile";
+import { listDialogMobileBillPeriods, getDialogMobileBillSummary, setDialogMobileApprovalOverride, setDialogMobileSalaryDeductionOverride, setDialogMobileBucketExclusion, setDialogMobileBucketRateOverride, setDialogMobileDataBucketNumber, setDialogMobileLineItemCharges, deleteDialogMobileBillPeriod } from "../api/dialogMobile";
 import DialogMobileBillUploadPanel from "../components/DialogMobileBillUploadPanel";
 import DialogMobileBucketExclusionPanel from "../components/DialogMobileBucketExclusionPanel";
 import DialogMobileBucketRatePanel from "../components/DialogMobileBucketRatePanel";
@@ -25,6 +25,9 @@ export default function DialogMobileBillsPage() {
   const [showDataBucketPanel, setShowDataBucketPanel] = useState(false);
   const [showManageDataBucketPanel, setShowManageDataBucketPanel] = useState(false);
   const [showBreakdown, setShowBreakdown] = useState(false);
+  const [editingSalaryDeductionId, setEditingSalaryDeductionId] = useState<string | null>(null);
+  const [salaryDeductionDraft, setSalaryDeductionDraft] = useState("");
+  const [savingSalaryDeduction, setSavingSalaryDeduction] = useState(false);
 
   const loadPeriods = useCallback(async () => {
     setLoadingPeriods(true);
@@ -52,6 +55,42 @@ export default function DialogMobileBillsPage() {
   async function handleApprovalChange(row: DialogMobileBillSummaryRow, value: string) {
     const updated = await setDialogMobileApprovalOverride(row.bill_line_item_id, { approval_override: value });
     setSummaryRows((rows) => rows.map((r) => (r.bill_line_item_id === updated.bill_line_item_id ? updated : r)));
+  }
+
+  function startEditSalaryDeduction(row: DialogMobileBillSummaryRow) {
+    setEditingSalaryDeductionId(row.bill_line_item_id);
+    setSalaryDeductionDraft(row.salary_deduction);
+  }
+
+  function cancelEditSalaryDeduction() {
+    setEditingSalaryDeductionId(null);
+    setSalaryDeductionDraft("");
+  }
+
+  async function saveSalaryDeductionOverride(lineItemId: string) {
+    setSavingSalaryDeduction(true);
+    try {
+      const updated = await setDialogMobileSalaryDeductionOverride(lineItemId, {
+        salary_deduction_override: salaryDeductionDraft === "" ? null : Number(salaryDeductionDraft),
+      });
+      setSummaryRows((rows) => rows.map((r) => (r.bill_line_item_id === updated.bill_line_item_id ? updated : r)));
+      setEditingSalaryDeductionId(null);
+      setSalaryDeductionDraft("");
+    } finally {
+      setSavingSalaryDeduction(false);
+    }
+  }
+
+  async function clearSalaryDeductionOverride(lineItemId: string) {
+    setSavingSalaryDeduction(true);
+    try {
+      const updated = await setDialogMobileSalaryDeductionOverride(lineItemId, { salary_deduction_override: null });
+      setSummaryRows((rows) => rows.map((r) => (r.bill_line_item_id === updated.bill_line_item_id ? updated : r)));
+      setEditingSalaryDeductionId(null);
+      setSalaryDeductionDraft("");
+    } finally {
+      setSavingSalaryDeduction(false);
+    }
   }
 
   async function handleSetBucketExclusion(lineItemId: string, isBucketExcluded: boolean) {
@@ -399,7 +438,7 @@ export default function DialogMobileBillsPage() {
                   <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
                     <span>Salary Deduction</span>
                     <span style={{ fontSize: 10, fontWeight: 400, textTransform: "none", letterSpacing: "normal", opacity: 0.7 }}>
-                      (VAS + Add To Bill Charges)
+                      (VAS + Add To Bill Charges + excess over limit)
                     </span>
                   </div>
                 </th>
@@ -467,7 +506,54 @@ export default function DialogMobileBillsPage() {
                     <td className="mono">{Number(row.vas) > 0 ? money(row.vas) : "—"}</td>
                     <td className="mono">{Number(row.add_to_bill_charges) > 0 ? money(row.add_to_bill_charges) : "—"}</td>
                     <td className="mono">{Number(row.late_payment_charges) > 0 ? money(row.late_payment_charges) : "—"}</td>
-                    <td className="mono">{Number(row.salary_deduction) > 0 ? money(row.salary_deduction) : "—"}</td>
+                    <td className="mono">
+                      {editingSalaryDeductionId === row.bill_line_item_id ? (
+                        <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
+                          <input
+                            type="number"
+                            step="0.01"
+                            autoFocus
+                            value={salaryDeductionDraft}
+                            onChange={(e) => setSalaryDeductionDraft(e.target.value)}
+                            style={{ width: 90 }}
+                          />
+                          <button
+                            type="button"
+                            className="link-btn"
+                            disabled={savingSalaryDeduction}
+                            onClick={() => saveSalaryDeductionOverride(row.bill_line_item_id)}
+                          >
+                            Save
+                          </button>
+                          <button type="button" className="link-btn" disabled={savingSalaryDeduction} onClick={cancelEditSalaryDeduction}>
+                            ✕
+                          </button>
+                        </div>
+                      ) : (
+                        <span
+                          style={{ cursor: "pointer" }}
+                          title="Click to manually edit this amount"
+                          onClick={() => startEditSalaryDeduction(row)}
+                        >
+                          {Number(row.salary_deduction) > 0 ? money(row.salary_deduction) : "—"}
+                          {row.is_salary_deduction_overridden && (
+                            <span className="pill pill-transferred" style={{ marginLeft: 6 }}>
+                              Edited
+                            </span>
+                          )}
+                        </span>
+                      )}
+                      {row.is_salary_deduction_overridden && editingSalaryDeductionId !== row.bill_line_item_id && (
+                        <button
+                          type="button"
+                          className="link-btn link-btn-danger"
+                          style={{ display: "block", fontSize: 11, marginTop: 2 }}
+                          onClick={() => clearSalaryDeductionOverride(row.bill_line_item_id)}
+                        >
+                          Reset to computed
+                        </button>
+                      )}
+                    </td>
                     <td>
                       <select
                         className={`mono approval-select ${approvalClass(row.need_approval)}`}

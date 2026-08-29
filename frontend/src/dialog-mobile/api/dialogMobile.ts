@@ -9,6 +9,7 @@ import type {
   DialogMobileImportResult,
   DialogMobileBillSummaryRow,
   DialogMobileApprovalOverrideInput,
+  DialogMobileSalaryDeductionOverrideInput,
   DialogMobileBucketExclusionInput,
   DialogMobileBucketRateOverrideInput,
   DialogMobileDataBucketSelectionInput,
@@ -115,6 +116,14 @@ export async function importDialogMobileBillPdf(label: string, file: File): Prom
 
 export function setDialogMobileApprovalOverride(lineItemId: string, payload: DialogMobileApprovalOverrideInput): Promise<DialogMobileBillSummaryRow> {
   return request<DialogMobileBillSummaryRow>(`/dialog-mobile/bills/line-items/${lineItemId}/approval-override`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+export function setDialogMobileSalaryDeductionOverride(lineItemId: string, payload: DialogMobileSalaryDeductionOverrideInput): Promise<DialogMobileBillSummaryRow> {
+  return request<DialogMobileBillSummaryRow>(`/dialog-mobile/bills/line-items/${lineItemId}/salary-deduction-override`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),

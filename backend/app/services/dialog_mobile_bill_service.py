@@ -284,17 +284,28 @@ def _build_summary_rows(db: Session, line_items: list[DialogMobileBillLineItem],
 
         net_amount = li.charges_for_bill_period - li.vat
         total = net_amount + bucket_nett
-        # Salary Deduction = VAS + Add To Bill Charges (both are personal/
-        # extra charges recovered via payroll, per current business rule —
-        # note this differs from the one Excel snapshot we originally
-        # reverse-engineered, which only used VAS; this is the corrected rule).
-        salary_deduction = li.vas + li.add_to_bill_charges
+        credit_limit = employee.credit_limit if employee and employee.credit_limit is not None else Decimal("0")
+
+        # Salary Deduction = VAS + Add To Bill Charges + any excess over
+        # Credit Limit (Total − Credit Limit, but only when Total actually
+        # exceeds it — clamped at 0 rather than allowed to go negative, so
+        # someone comfortably under their limit never has this REDUCE their
+        # deduction below VAS + Add To Bill Charges). Can be overridden with
+        # an exact manual figure via salary_deduction_override, same pattern
+        # as approval_override.
+        excess_over_credit_limit = max(total - credit_limit, Decimal("0"))
+        computed_salary_deduction = li.vas + li.add_to_bill_charges + excess_over_credit_limit
+        if li.salary_deduction_override is not None:
+            salary_deduction = li.salary_deduction_override
+            is_salary_deduction_overridden = True
+        else:
+            salary_deduction = computed_salary_deduction
+            is_salary_deduction_overridden = False
 
         if li.approval_override:
             need_approval = li.approval_override
             is_overridden = True
         else:
-            credit_limit = employee.credit_limit if employee and employee.credit_limit is not None else Decimal("0")
             # Compares against Total (Net Amount + Bucket Nett), not just
             # Net Amount — the bucket portion is a real charge against the
             # employee too, so it belongs in the credit check.
@@ -331,6 +342,7 @@ def _build_summary_rows(db: Session, line_items: list[DialogMobileBillLineItem],
             bucket_nett=bucket_nett,
             total=total,
             salary_deduction=salary_deduction,
+            is_salary_deduction_overridden=is_salary_deduction_overridden,
             need_approval=need_approval,
             is_overridden=is_overridden,
             is_general_line=is_general_line,
@@ -351,6 +363,23 @@ def set_approval_override(db: Session, line_item_id: uuid.UUID, payload: DialogM
         raise HTTPException(status_code=404, detail="Bill line item not found")
 
     line_item.approval_override = payload.approval_override
+    db.commit()
+    db.refresh(line_item)
+    return get_summary_row_for_line_item(db, line_item_id)
+
+
+def set_salary_deduction_override(db: Session, line_item_id: uuid.UUID, salary_deduction_override: Decimal | None) -> DialogMobileBillSummaryRow:
+    """
+    Sets (or clears, if None) an exact manual Salary Deduction figure for
+    THIS line item — overrides the computed value (VAS + Add To Bill
+    Charges + excess over Credit Limit) entirely, same pattern as
+    approval_override. Doesn't affect any other row.
+    """
+    line_item = db.query(DialogMobileBillLineItem).filter(DialogMobileBillLineItem.id == line_item_id).first()
+    if not line_item:
+        raise HTTPException(status_code=404, detail="Bill line item not found")
+
+    line_item.salary_deduction_override = salary_deduction_override
     db.commit()
     db.refresh(line_item)
     return get_summary_row_for_line_item(db, line_item_id)

@@ -133,6 +133,7 @@ export interface DialogMobileBillSummaryRow {
   bucket_nett: string;
   total: string;
   salary_deduction: string;
+  is_salary_deduction_overridden: boolean;
   need_approval: string;
   is_overridden: boolean;
   is_general_line: boolean;
@@ -146,6 +147,10 @@ export interface DialogMobileBillSummaryRow {
 
 export interface DialogMobileApprovalOverrideInput {
   approval_override: string | null;
+}
+
+export interface DialogMobileSalaryDeductionOverrideInput {
+  salary_deduction_override: number | null;
 }
 
 export interface DialogMobileBucketExclusionInput {

@@ -68,4 +68,12 @@ class DialogMobileBillLineItem(Base):
     # project cost.
     is_bucket_excluded = Column(Boolean, nullable=False, default=False)
 
+    # Manual override for Salary Deduction, same pattern as
+    # approval_override — the computed value (VAS + Add To Bill Charges +
+    # any excess over Credit Limit) can be wrong for a specific case, so a
+    # human can set an exact figure instead. NULL means "use the computed
+    # value"; set means "always use this exact number regardless of the
+    # underlying charges changing later."
+    salary_deduction_override = Column(Numeric(12, 2), nullable=True)
+
     created_at = Column(DateTime(timezone=True), server_default=func.now())

@@ -10,7 +10,7 @@ from app.database import get_db
 from app.schemas.dialog_mobile_bill import (
     DialogMobileImportResult, DialogMobileBillSummaryRow, DialogMobileApprovalOverrideInput,
     DialogMobileBucketExclusionInput, DialogMobileBucketRateOverrideInput, DialogMobileLineItemChargeUpdateInput,
-    DialogMobileBillPeriodOut, DialogMobileDataBucketSelectionInput,
+    DialogMobileBillPeriodOut, DialogMobileDataBucketSelectionInput, DialogMobileSalaryDeductionOverrideInput,
 )
 from app.services import dialog_mobile_bill_service
 
@@ -66,6 +66,15 @@ def delete_bill_period(bill_period_id: uuid.UUID, db: Session = Depends(get_db))
 @router.put("/line-items/{line_item_id}/approval-override", response_model=DialogMobileBillSummaryRow)
 def set_approval_override(line_item_id: uuid.UUID, payload: DialogMobileApprovalOverrideInput, db: Session = Depends(get_db)):
     return dialog_mobile_bill_service.set_approval_override(db, line_item_id, payload)
+
+
+@router.put("/line-items/{line_item_id}/salary-deduction-override", response_model=DialogMobileBillSummaryRow)
+def set_salary_deduction_override(line_item_id: uuid.UUID, payload: DialogMobileSalaryDeductionOverrideInput, db: Session = Depends(get_db)):
+    """
+    Sets (or clears, if null) an exact manual Salary Deduction figure for
+    this line item, overriding the computed value entirely.
+    """
+    return dialog_mobile_bill_service.set_salary_deduction_override(db, line_item_id, payload.salary_deduction_override)
 
 
 @router.put("/{bill_period_id}/bucket-rate-override", response_model=list[DialogMobileBillSummaryRow])

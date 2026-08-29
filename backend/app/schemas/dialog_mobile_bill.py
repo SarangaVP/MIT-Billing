@@ -57,6 +57,12 @@ class DialogMobileApprovalOverrideInput(BaseModel):
     approval_override: str | None  # e.g. "Manager approved", or null to clear it
 
 
+class DialogMobileSalaryDeductionOverrideInput(BaseModel):
+    # Null clears the override, reverting to the computed value
+    # (VAS + Add To Bill Charges + excess over Credit Limit, if any).
+    salary_deduction_override: Decimal | None = None
+
+
 class DialogMobileBucketExclusionInput(BaseModel):
     is_bucket_excluded: bool
 
@@ -121,6 +127,7 @@ class DialogMobileBillSummaryRow(BaseModel):
     bucket_nett: Decimal
     total: Decimal
     salary_deduction: Decimal
+    is_salary_deduction_overridden: bool
     need_approval: str
     is_overridden: bool
     is_general_line: bool
