@@ -25,6 +25,7 @@ export default function DialogMobileBillsPage() {
   const [showDataBucketPanel, setShowDataBucketPanel] = useState(false);
   const [showManageDataBucketPanel, setShowManageDataBucketPanel] = useState(false);
   const [showBreakdown, setShowBreakdown] = useState(false);
+  const [showProjectWorking, setShowProjectWorking] = useState(false);
   const [editingSalaryDeductionId, setEditingSalaryDeductionId] = useState<string | null>(null);
   const [salaryDeductionDraft, setSalaryDeductionDraft] = useState("");
   const [savingSalaryDeduction, setSavingSalaryDeduction] = useState(false);
@@ -206,6 +207,21 @@ export default function DialogMobileBillsPage() {
     .sort((a, b) => a.team.localeCompare(b.team));
   const teamCostTotal = teamCostRows.reduce((sum, r) => sum + r.cost, 0);
 
+  // "Project Working" — a specific subset billed against project costs
+  // rather than the department's own budget: everyone on Managed Services
+  // or Cyber Security (regardless of cadre), plus anyone on ANY OTHER team
+  // whose cadre is Fixed Term or Consultancy Contract (a project-funded
+  // hire, wherever they happen to sit organizationally). The data bucket
+  // number itself is never eligible here — it's excluded from normalRows
+  // already.
+  const PROJECT_WORKING_TEAMS = ["Managed Services", "Cyber Security"];
+  const PROJECT_WORKING_CADRES = ["Fixed Term", "Consultancy Contract"];
+  const projectWorkingRows = normalRows.filter(
+    (row) =>
+      (row.lob && PROJECT_WORKING_TEAMS.includes(row.lob)) ||
+      (row.cadre && PROJECT_WORKING_CADRES.includes(row.cadre))
+  );
+
   const sum = (key: keyof DialogMobileBillSummaryRow) => filteredRows.reduce((acc, r) => acc + Number(r[key] as string), 0);
   const totals = {
     total_usage_charges: sum("total_usage_charges"),
@@ -308,6 +324,9 @@ export default function DialogMobileBillsPage() {
             <button className="btn btn-ghost" onClick={() => setShowBreakdown((v) => !v)}>
               {showBreakdown ? "Hide" : "Show"} team cost
             </button>
+            <button className="btn btn-ghost" onClick={() => setShowProjectWorking((v) => !v)}>
+              {showProjectWorking ? "Hide" : "Show"} project working
+            </button>
             <button className="btn btn-ghost" onClick={handleExport}>
               Export to Excel
             </button>
@@ -380,6 +399,100 @@ export default function DialogMobileBillsPage() {
           </div>
         )}
 
+        {showProjectWorking && (
+          <div className="table-wrap" style={{ marginBottom: 20 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 12px" }}>
+              <strong style={{ fontSize: 13 }}>Project Working</strong>
+              <button
+                type="button"
+                className="link-btn"
+                onClick={() =>
+                  exportTableToExcel(
+                    ["Mobile No", "Emp No", "Name", "Team", "Net Amount", "Salary deduction", "Late payment fee", "Cost"],
+                    projectWorkingRows.map((row) => [
+                      row.mobile_no,
+                      row.emp_no ?? "",
+                      row.name ?? "Unmatched number",
+                      row.lob ?? "",
+                      Number(row.net_amount),
+                      Number(row.salary_deduction),
+                      Number(row.late_payment_charges),
+                      Number(row.net_amount) - Number(row.salary_deduction) - Number(row.late_payment_charges),
+                    ]),
+                    `DialogMobile_${selectedPeriod.label.replace(/\s+/g, "_")}_project_working.xlsx`,
+                    "Project working"
+                  )
+                }
+              >
+                Export to Excel
+              </button>
+            </div>
+            <table>
+              <thead>
+                <tr>
+                  <th>Mobile No</th>
+                  <th>Emp No</th>
+                  <th>Name</th>
+                  <th>Team</th>
+                  <th>Net Amount</th>
+                  <th>Salary deduction</th>
+                  <th>Late payment fee</th>
+                  <th>Cost</th>
+                </tr>
+              </thead>
+              <tbody>
+                {projectWorkingRows.length === 0 && (
+                  <tr>
+                    <td colSpan={8} className="empty-row">
+                      No rows match — nobody on Managed Services/Cyber Security, or Fixed Term/Consultancy Contract elsewhere.
+                    </td>
+                  </tr>
+                )}
+                {projectWorkingRows.map((row) => {
+                  const cost = Number(row.net_amount) - Number(row.salary_deduction) - Number(row.late_payment_charges);
+                  return (
+                    <tr key={row.bill_line_item_id}>
+                      <td className="mono">{row.mobile_no}</td>
+                      <td className="mono">{row.emp_no || <span className="muted">—</span>}</td>
+                      <td>{row.name || <span className="muted">Unmatched number</span>}</td>
+                      <td>{row.lob || <span className="muted">—</span>}</td>
+                      <td className="mono">{money(row.net_amount)}</td>
+                      <td className="mono">{Number(row.salary_deduction) > 0 ? money(row.salary_deduction) : "—"}</td>
+                      <td className="mono">{Number(row.late_payment_charges) > 0 ? money(row.late_payment_charges) : "—"}</td>
+                      <td className="mono">{money(cost)}</td>
+                    </tr>
+                  );
+                })}
+                {projectWorkingRows.length > 0 && (
+                  <tr className="row-strong">
+                    <td>Total</td>
+                    <td></td>
+                    <td></td>
+                    <td></td>
+                    <td className="mono">
+                      {money(projectWorkingRows.reduce((acc, r) => acc + Number(r.net_amount), 0))}
+                    </td>
+                    <td className="mono">
+                      {money(projectWorkingRows.reduce((acc, r) => acc + Number(r.salary_deduction), 0))}
+                    </td>
+                    <td className="mono">
+                      {money(projectWorkingRows.reduce((acc, r) => acc + Number(r.late_payment_charges), 0))}
+                    </td>
+                    <td className="mono">
+                      {money(
+                        projectWorkingRows.reduce(
+                          (acc, r) => acc + (Number(r.net_amount) - Number(r.salary_deduction) - Number(r.late_payment_charges)),
+                          0
+                        )
+                      )}
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
+
         <div className="toolbar">
           <input
             className="search-input"
@@ -438,7 +551,7 @@ export default function DialogMobileBillsPage() {
                   <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
                     <span>Salary Deduction</span>
                     <span style={{ fontSize: 10, fontWeight: 400, textTransform: "none", letterSpacing: "normal", opacity: 0.7 }}>
-                      (VAS + Add To Bill Charges + excess over limit)
+                      (VAS + Add To Bill Charges)
                     </span>
                   </div>
                 </th>
