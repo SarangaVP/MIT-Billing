@@ -97,6 +97,21 @@ export default function DialogMobileBillUploadPanel({ onImported, onCancel }: Pr
           </div>
         )}
 
+        {result && result.corrupted_value_warnings.length > 0 && (
+          <div className="banner banner-error">
+            {result.corrupted_value_warnings.length} value{result.corrupted_value_warnings.length > 1 ? "s" : ""} in
+            the source file were too large to store (likely a broken formula in Dialog's own export) and{" "}
+            {result.corrupted_value_warnings.length > 1 ? "were" : "was"} reset to 0 so the import could still
+            complete. The connection{result.corrupted_value_warnings.length > 1 ? "s were" : " was"} still imported —
+            check and correct manually via "Edit line item" if needed:
+            <ul style={{ margin: "8px 0 0", paddingLeft: 18 }}>
+              {result.corrupted_value_warnings.map((w, i) => (
+                <li key={i}>{w}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+
         <div className="panel-actions">
           <button type="button" className="btn btn-ghost" onClick={onCancel}>
             {result ? "Close" : "Cancel"}

@@ -41,6 +41,14 @@ class DialogMobileImportResult(BaseModel):
     reconciled: bool
     reconciliation_discrepancy: Decimal | None
     source_format: str
+    # Connections whose source file had a value too large to store (e.g. a
+    # broken/circular Excel formula in Dialog's own export serializing to
+    # something like 76,669,945,315,413.83) — confirmed real, seen on a
+    # genuine .xls invoice. The offending field is reset to 0 so the import
+    # can still complete and the connection isn't silently dropped from the
+    # bill, but this is surfaced here so it can be checked/corrected
+    # manually via "Edit line item".
+    corrupted_value_warnings: list[str] = []
 
 
 class DialogMobileApprovalOverrideInput(BaseModel):

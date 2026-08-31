@@ -93,6 +93,11 @@ export interface DialogMobileImportResult {
   reconciled: boolean;
   reconciliation_discrepancy: string | null;
   source_format: DialogMobileSourceFormat;
+  // Connections whose source file had a value too large to store (e.g. a
+  // broken/circular Excel formula) — that specific field was reset to 0
+  // so the import could still complete without dropping the connection
+  // from the bill. Empty in the normal case.
+  corrupted_value_warnings: string[];
 }
 
 export interface DialogMobileBillSummaryRow {

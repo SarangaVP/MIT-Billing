@@ -31,6 +31,37 @@ def _is_intern(li: DialogMobileBillLineItem, employee: DialogMobileEmployee | No
     return bool(employee and employee.cadre and employee.cadre.strip().lower() == "intern")
 
 
+# The DB column is NUMERIC(12, 2) — max storable absolute value is
+# 9999999999.99 (10 digits before the decimal point). Anything at or
+# beyond this crashes the whole import with a raw psycopg2 error unless
+# guarded here first.
+_NUMERIC_12_2_MAX_ABS = Decimal("9999999999.99")
+
+
+def _safe_numeric_field(mobile_no: str, field_label: str, value, warnings: list[str]):
+    """
+    Confirmed real: a genuine Dialog .xls export had Data Rental/Data Usage
+    values of ±76,669,945,315,413.83 for one connection — almost certainly
+    a broken/circular formula in Dialog's own spreadsheet, not anything we
+    can infer a correct value for. Rather than crash the entire ~775-row
+    import over one connection's one bad field, this resets JUST that
+    field to 0 and records a warning, so the connection still gets
+    imported normally (never silently dropped from the bill) and the
+    issue is visible for manual correction via "Edit line item".
+    """
+    if value is None:
+        return value
+    try:
+        decimal_value = Decimal(str(value))
+    except Exception:
+        warnings.append(f"{mobile_no}: {field_label} was not a valid number ({value!r}) — set to 0")
+        return 0
+    if abs(decimal_value) >= _NUMERIC_12_2_MAX_ABS:
+        warnings.append(f"{mobile_no}: {field_label} had an out-of-range value ({decimal_value}) — likely a broken formula in the source file, set to 0")
+        return 0
+    return value
+
+
 def _parse_date(value: str | None, fmt: str) -> date | None:
     if not value:
         return None
@@ -91,33 +122,37 @@ def import_bill_file(db: Session, file_path: str, label: str, source_format: str
     db.add(bill_period)
     db.flush()
 
+    corrupted_value_warnings: list[str] = []
     for row in rows:
+        mobile_no = row["mobile_no"]
+        corrupted_warnings: list[str] = []
         db.add(DialogMobileBillLineItem(
             bill_period_id=bill_period.id,
-            mobile_no=row["mobile_no"],
-            previous_due_amount=row.get("previous_due_amount", 0),
-            payments=row.get("payments", 0),
-            total_usage_charges=row.get("total_usage_charges", 0),
-            idd=row.get("idd", 0),
-            roaming=row.get("roaming", 0),
-            vas=row.get("vas", 0),
-            discounts=row.get("discounts", 0),
-            bill_adjustments_balance_transfers=row.get("bill_adjustments_balance_transfers", 0),
-            commitment_charges=row.get("commitment_charges", 0),
-            late_payment_charges=row.get("late_payment_charges", 0),
-            add_to_bill_charges=row.get("add_to_bill_charges", 0),
-            instalment_plans=row.get("instalment_plans", 0),
-            govt_taxes=row.get("govt_taxes", 0),
-            vat=row.get("vat", 0),
-            charges_for_bill_period=row.get("charges_for_bill_period", 0),
-            total_due_amount=row.get("total_due_amount", 0),
+            mobile_no=mobile_no,
+            previous_due_amount=_safe_numeric_field(mobile_no, "Previous Due Amount", row.get("previous_due_amount", 0), corrupted_warnings),
+            payments=_safe_numeric_field(mobile_no, "Payments", row.get("payments", 0), corrupted_warnings),
+            total_usage_charges=_safe_numeric_field(mobile_no, "Total Usage Charges", row.get("total_usage_charges", 0), corrupted_warnings),
+            idd=_safe_numeric_field(mobile_no, "IDD", row.get("idd", 0), corrupted_warnings),
+            roaming=_safe_numeric_field(mobile_no, "Roaming", row.get("roaming", 0), corrupted_warnings),
+            vas=_safe_numeric_field(mobile_no, "VAS", row.get("vas", 0), corrupted_warnings),
+            discounts=_safe_numeric_field(mobile_no, "Discounts", row.get("discounts", 0), corrupted_warnings),
+            bill_adjustments_balance_transfers=_safe_numeric_field(mobile_no, "Bill Adjustments/Balance Transfers", row.get("bill_adjustments_balance_transfers", 0), corrupted_warnings),
+            commitment_charges=_safe_numeric_field(mobile_no, "Commitment Charges", row.get("commitment_charges", 0), corrupted_warnings),
+            late_payment_charges=_safe_numeric_field(mobile_no, "Late Payment Charges", row.get("late_payment_charges", 0), corrupted_warnings),
+            add_to_bill_charges=_safe_numeric_field(mobile_no, "Add To Bill Charges", row.get("add_to_bill_charges", 0), corrupted_warnings),
+            instalment_plans=_safe_numeric_field(mobile_no, "Instalment Plans", row.get("instalment_plans", 0), corrupted_warnings),
+            govt_taxes=_safe_numeric_field(mobile_no, "Government Taxes", row.get("govt_taxes", 0), corrupted_warnings),
+            vat=_safe_numeric_field(mobile_no, "VAT", row.get("vat", 0), corrupted_warnings),
+            charges_for_bill_period=_safe_numeric_field(mobile_no, "Charges for Bill Period", row.get("charges_for_bill_period", 0), corrupted_warnings),
+            total_due_amount=_safe_numeric_field(mobile_no, "Total Due Amount", row.get("total_due_amount", 0), corrupted_warnings),
             # Only present when source_format == "xls" — None for PDF rows
-            voice_rental=row.get("voice_rental"),
-            voice_usage=row.get("voice_usage"),
-            sms=row.get("sms"),
-            data_rental=row.get("data_rental"),
-            data_usage=row.get("data_usage"),
+            voice_rental=_safe_numeric_field(mobile_no, "Voice Rental", row.get("voice_rental"), corrupted_warnings),
+            voice_usage=_safe_numeric_field(mobile_no, "Voice Usage", row.get("voice_usage"), corrupted_warnings),
+            sms=_safe_numeric_field(mobile_no, "SMS", row.get("sms"), corrupted_warnings),
+            data_rental=_safe_numeric_field(mobile_no, "Data Rental", row.get("data_rental"), corrupted_warnings),
+            data_usage=_safe_numeric_field(mobile_no, "Data Usage", row.get("data_usage"), corrupted_warnings),
         ))
+        corrupted_value_warnings.extend(corrupted_warnings)
 
     db.commit()
     db.refresh(bill_period)
@@ -130,6 +165,7 @@ def import_bill_file(db: Session, file_path: str, label: str, source_format: str
         reconciled=reconciled,
         reconciliation_discrepancy=discrepancy,
         source_format=source_format,
+        corrupted_value_warnings=corrupted_value_warnings,
     )
 
 
