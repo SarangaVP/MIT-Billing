@@ -222,11 +222,13 @@ def _build_summary_rows(db: Session, line_items: list[DialogMobileBillLineItem],
             standard_bucket_vat = Decimal("0")
             standard_bucket_nett = Decimal("0")
     else:
-        # No data bucket number selected yet — fall back to the manual
-        # per-bill-period override (or Rs. 0 if that was never set either).
-        # Still compute eligible_count for display purposes (how many
-        # connections are currently receiving this flat rate), even though
-        # it plays no role in a manually-typed rate's own value.
+        # No data bucket number selected for this bill period — nothing
+        # to allocate. The "Set bucket rate manually" fallback was removed:
+        # a month without a proper data bucket connection now simply
+        # results in Rs. 0 bucket cost for everyone until a data bucket
+        # number is selected, rather than silently reading a manual figure
+        # that's easy to forget was set (or forget was ignored, when a
+        # data bucket number WAS active).
         eligible_count = sum(
             1
             for li in line_items
@@ -234,9 +236,9 @@ def _build_summary_rows(db: Session, line_items: list[DialogMobileBillLineItem],
             and not _is_intern(li, employee_by_mobile.get(li.mobile_no))
             and not li.is_bucket_excluded
         )
-        standard_bucket_cost = bill_period.bucket_cost_override or Decimal("0")
-        standard_bucket_vat = bill_period.bucket_vat_override or Decimal("0")
-        standard_bucket_nett = standard_bucket_cost - standard_bucket_vat
+        standard_bucket_cost = Decimal("0")
+        standard_bucket_vat = Decimal("0")
+        standard_bucket_nett = Decimal("0")
 
     results = []
     for li in line_items:
@@ -411,21 +413,6 @@ def update_line_item_charges(db: Session, line_item_id: uuid.UUID, payload: Dial
     db.commit()
     db.refresh(line_item)
     return get_summary_row_for_line_item(db, line_item_id)
-
-
-def set_bucket_rate_override(db: Session, bill_period_id: uuid.UUID, cost: Decimal | None, vat: Decimal | None) -> list[DialogMobileBillSummaryRow]:
-    """
-    Sets (or clears, if both are None) a bucket rate override for THIS
-    bill period only — unlike the standard rate table, this never affects
-    any other month. Recalculation is automatic: bucket_cost/bucket_vat
-    are computed live in _build_summary_rows on every read, so nothing
-    needs to be persisted per line item here.
-    """
-    period = get_bill_period(db, bill_period_id)
-    period.bucket_cost_override = cost
-    period.bucket_vat_override = vat
-    db.commit()
-    return get_summary(db, bill_period_id)
 
 
 def set_bucket_exclusion(db: Session, line_item_id: uuid.UUID, is_bucket_excluded: bool) -> DialogMobileBillSummaryRow:

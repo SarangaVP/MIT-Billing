@@ -81,8 +81,6 @@ export interface DialogMobileBillPeriod {
   source_format: DialogMobileSourceFormat;
   reconciled: boolean;
   reconciliation_discrepancy: string | null;
-  bucket_cost_override: string | null;
-  bucket_vat_override: string | null;
   data_bucket_mobile_no: string | null;
   created_at: string;
 }
@@ -155,11 +153,6 @@ export interface DialogMobileSalaryDeductionOverrideInput {
 
 export interface DialogMobileBucketExclusionInput {
   is_bucket_excluded: boolean;
-}
-
-export interface DialogMobileBucketRateOverrideInput {
-  bucket_cost_override: number | null;
-  bucket_vat_override: number | null;
 }
 
 export interface DialogMobileDataBucketSelectionInput {

@@ -11,7 +11,6 @@ import type {
   DialogMobileApprovalOverrideInput,
   DialogMobileSalaryDeductionOverrideInput,
   DialogMobileBucketExclusionInput,
-  DialogMobileBucketRateOverrideInput,
   DialogMobileDataBucketSelectionInput,
   DialogMobileLineItemChargeUpdateInput,
 } from "../types/dialogMobile";
@@ -132,14 +131,6 @@ export function setDialogMobileSalaryDeductionOverride(lineItemId: string, paylo
 
 export function setDialogMobileBucketExclusion(lineItemId: string, payload: DialogMobileBucketExclusionInput): Promise<DialogMobileBillSummaryRow> {
   return request<DialogMobileBillSummaryRow>(`/dialog-mobile/bills/line-items/${lineItemId}/bucket-exclusion`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
-}
-
-export function setDialogMobileBucketRateOverride(billPeriodId: string, payload: DialogMobileBucketRateOverrideInput): Promise<DialogMobileBillSummaryRow[]> {
-  return request<DialogMobileBillSummaryRow[]>(`/dialog-mobile/bills/${billPeriodId}/bucket-rate-override`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),

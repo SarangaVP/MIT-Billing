@@ -33,11 +33,12 @@ class DialogMobileBillPeriod(Base):
     reconciled = Column(Boolean, nullable=False, default=True)
     reconciliation_discrepancy = Column(Numeric(14, 2), nullable=True)
 
-    # Optional per-bill-period override of the bucket cost/VAT — set via
-    # "Set bucket rate" on the Bills page for that specific month. There is
-    # no fallback/standard rate anymore: if both are NULL, bucket cost and
-    # VAT are simply zero for every line item in this bill period until an
-    # override is set.
+    # DEPRECATED — kept only so past bill periods that already had a value
+    # here retain their historical record; the "Set bucket rate manually"
+    # feature that wrote to these was removed. No code reads these columns
+    # anymore (see dialog_mobile_bill_service._build_summary_rows): a bill
+    # period with no data_bucket_mobile_no selected now simply gets Rs. 0
+    # bucket cost/VAT for everyone, with no manual fallback.
     bucket_cost_override = Column(Numeric(12, 2), nullable=True)
     bucket_vat_override = Column(Numeric(12, 2), nullable=True)
 
@@ -46,10 +47,9 @@ class DialogMobileBillPeriod(Base):
     # the month — e.g. the "Data bucket" General line (765155535). When
     # set, the standard bucket cost/VAT for every other eligible line item
     # is derived automatically from this connection's own charges (see
-    # dialog_mobile_bill_service._build_summary_rows) instead of the manual
-    # bucket_cost_override/bucket_vat_override above. NULL means no data
-    # bucket number has been picked yet for this month, in which case the
-    # manual override (or Rs. 0) is used as before.
+    # dialog_mobile_bill_service._build_summary_rows). NULL means no data
+    # bucket number has been picked yet for this month, in which case
+    # bucket cost/VAT is simply Rs. 0 for everyone until one is selected.
     data_bucket_mobile_no = Column(String, nullable=True)
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())

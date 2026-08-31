@@ -17,29 +17,19 @@ class DialogMobileBillPeriodOut(BaseModel):
     source_format: str
     reconciled: bool
     reconciliation_discrepancy: Decimal | None
-    bucket_cost_override: Decimal | None
-    bucket_vat_override: Decimal | None
     data_bucket_mobile_no: str | None
     created_at: datetime
 
     model_config = {"from_attributes": True}
 
 
-class DialogMobileBucketRateOverrideInput(BaseModel):
-    # Both null clears the override, reverting this bill period back to
-    # whatever rate is active in the standard rate table. Only used as a
-    # fallback when no data_bucket_mobile_no has been selected — see
-    # DialogMobileDataBucketSelectionInput below, which is the normal path now.
-    bucket_cost_override: Decimal | None = None
-    bucket_vat_override: Decimal | None = None
-
-
 class DialogMobileDataBucketSelectionInput(BaseModel):
     # The mobile number (must belong to a line item already in THIS bill
     # period) whose own Charges for Bill Period / VAT become the shared
     # pool that everyone else's bucket cost/VAT is automatically split
-    # from. Null clears the selection, reverting to the manual
-    # bucket_cost_override/bucket_vat_override behavior for this month.
+    # from. Null clears the selection — with no manual fallback anymore,
+    # this simply results in Rs. 0 bucket cost for everyone until a data
+    # bucket number is selected again.
     data_bucket_mobile_no: str | None = None
 
 

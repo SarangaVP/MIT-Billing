@@ -98,7 +98,7 @@ export default function DialogMobileDataBucketPanel({ periodLabel, rows, current
             </div>
           </div>
         ) : (
-          <p className="field-hint">No data bucket number selected yet for this month — bucket cost/VAT falls back to the manual rate (or Rs. 0).</p>
+          <p className="field-hint">No data bucket number selected yet for this month — bucket cost/VAT is Rs. 0 for everyone until one is selected.</p>
         )}
 
         <label>

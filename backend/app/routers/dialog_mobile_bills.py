@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.schemas.dialog_mobile_bill import (
     DialogMobileImportResult, DialogMobileBillSummaryRow, DialogMobileApprovalOverrideInput,
-    DialogMobileBucketExclusionInput, DialogMobileBucketRateOverrideInput, DialogMobileLineItemChargeUpdateInput,
+    DialogMobileBucketExclusionInput, DialogMobileLineItemChargeUpdateInput,
     DialogMobileBillPeriodOut, DialogMobileDataBucketSelectionInput, DialogMobileSalaryDeductionOverrideInput,
 )
 from app.services import dialog_mobile_bill_service
@@ -77,16 +77,6 @@ def set_salary_deduction_override(line_item_id: uuid.UUID, payload: DialogMobile
     return dialog_mobile_bill_service.set_salary_deduction_override(db, line_item_id, payload.salary_deduction_override)
 
 
-@router.put("/{bill_period_id}/bucket-rate-override", response_model=list[DialogMobileBillSummaryRow])
-def set_bucket_rate_override(bill_period_id: uuid.UUID, payload: DialogMobileBucketRateOverrideInput, db: Session = Depends(get_db)):
-    """
-    Sets (or clears, if both fields are null) a bucket rate that applies
-    ONLY to this bill period — unlike the standard rate table, which
-    applies from its effective date forward to every later month too.
-    """
-    return dialog_mobile_bill_service.set_bucket_rate_override(db, bill_period_id, payload.bucket_cost_override, payload.bucket_vat_override)
-
-
 @router.put("/line-items/{line_item_id}/bucket-exclusion", response_model=DialogMobileBillSummaryRow)
 def set_bucket_exclusion(line_item_id: uuid.UUID, payload: DialogMobileBucketExclusionInput, db: Session = Depends(get_db)):
     return dialog_mobile_bill_service.set_bucket_exclusion(db, line_item_id, payload.is_bucket_excluded)
@@ -97,7 +87,9 @@ def set_data_bucket_number(bill_period_id: uuid.UUID, payload: DialogMobileDataB
     """
     Selects (or clears, if data_bucket_mobile_no is null) the connection
     whose own charges become the automatically-split bucket pool for this
-    bill period — replaces manually typing a rate via bucket-rate-override.
+    bill period. Clearing it results in Rs. 0 bucket cost for everyone
+    until a data bucket number is selected again — there's no manual rate
+    fallback anymore.
     """
     return dialog_mobile_bill_service.set_data_bucket_number(db, bill_period_id, payload.data_bucket_mobile_no)
 

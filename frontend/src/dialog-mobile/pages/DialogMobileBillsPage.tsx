@@ -1,9 +1,8 @@
 import { useEffect, useState, useCallback } from "react";
 import type { DialogMobileBillPeriod, DialogMobileBillSummaryRow, DialogMobileLineItemChargeUpdateInput } from "../types/dialogMobile";
-import { listDialogMobileBillPeriods, getDialogMobileBillSummary, setDialogMobileApprovalOverride, setDialogMobileSalaryDeductionOverride, setDialogMobileBucketExclusion, setDialogMobileBucketRateOverride, setDialogMobileDataBucketNumber, setDialogMobileLineItemCharges, deleteDialogMobileBillPeriod } from "../api/dialogMobile";
+import { listDialogMobileBillPeriods, getDialogMobileBillSummary, setDialogMobileApprovalOverride, setDialogMobileSalaryDeductionOverride, setDialogMobileBucketExclusion, setDialogMobileDataBucketNumber, setDialogMobileLineItemCharges, deleteDialogMobileBillPeriod } from "../api/dialogMobile";
 import DialogMobileBillUploadPanel from "../components/DialogMobileBillUploadPanel";
 import DialogMobileBucketExclusionPanel from "../components/DialogMobileBucketExclusionPanel";
-import DialogMobileBucketRatePanel from "../components/DialogMobileBucketRatePanel";
 import DialogMobileDataBucketPanel from "../components/DialogMobileDataBucketPanel";
 import DialogMobileEditLineItemPanel from "../components/DialogMobileEditLineItemPanel";
 import DialogMobileConfirmPanel from "../components/DialogMobileConfirmPanel";
@@ -21,7 +20,6 @@ export default function DialogMobileBillsPage() {
   const [approvalFilter, setApprovalFilter] = useState("");
   const [deletingPeriod, setDeletingPeriod] = useState<DialogMobileBillPeriod | null>(null);
   const [showBucketExclusionPanel, setShowBucketExclusionPanel] = useState(false);
-  const [showBucketRatePanel, setShowBucketRatePanel] = useState(false);
   const [showDataBucketPanel, setShowDataBucketPanel] = useState(false);
   const [showEditLineItemPanel, setShowEditLineItemPanel] = useState(false);
   const [showBreakdown, setShowBreakdown] = useState(false);
@@ -113,26 +111,6 @@ export default function DialogMobileBillsPage() {
     if (selectedPeriod) {
       setSummaryRows(await getDialogMobileBillSummary(selectedPeriod.id));
     }
-  }
-
-  function handleOpenBucketRatePanel() {
-    setShowBucketRatePanel(true);
-  }
-
-  async function handleSaveBucketRate(cost: number | null, vat: number | null) {
-    if (!selectedPeriod) return;
-    const rows = await setDialogMobileBucketRateOverride(selectedPeriod.id, {
-      bucket_cost_override: cost,
-      bucket_vat_override: vat,
-    });
-    setSummaryRows(rows);
-    setShowBucketRatePanel(false);
-    // The override lives on the bill period itself, so refresh it too —
-    // otherwise reopening this panel would show stale override values.
-    const refreshedPeriods = await listDialogMobileBillPeriods();
-    setPeriods(refreshedPeriods);
-    const refreshed = refreshedPeriods.find((p) => p.id === selectedPeriod.id);
-    if (refreshed) setSelectedPeriod(refreshed);
   }
 
   async function handleSaveDataBucketNumber(mobileNo: string | null) {
@@ -249,7 +227,7 @@ export default function DialogMobileBillsPage() {
       "Mobile No", "EMP No", "Name", "Credit Limit", "Project", "Total Usage Charges",
       ...(hasBreakdown ? ["Voice Rental", "Voice Usage", "SMS", "Data Rental", "Data Usage"] : []),
       "IDD", "Roaming", "Charges for Bill Period", "VAT", "Net Amount", "Total - Credit Limit", "Bucket Cost", "Total",
-      "VAS", "Add To Bill Charges", "Late Payment Charges", "Salary Deduction (VAS + Add To Bill Charges)", "Need Approval",
+      "VAS", "Add To Bill Charges", "Late Payment Charges", "Salary Deduction (VAS + Add To Bill Charges + excess over Credit Limit)", "Need Approval",
     ];
     const rows = filteredRows.map((row) => [
       row.mobile_no, row.emp_no ?? "", row.name ?? "Unmatched number",
@@ -312,9 +290,6 @@ export default function DialogMobileBillsPage() {
             <button className="btn btn-ghost" onClick={() => setShowDataBucketPanel(true)}>
               {dataBucketRow ? "Change data bucket number" : "Select data bucket number"}
             </button>
-            <button className="btn btn-ghost" onClick={handleOpenBucketRatePanel}>
-              Set bucket rate manually
-            </button>
             <button className="btn btn-ghost" onClick={() => setShowBucketExclusionPanel(true)}>
               Manage bucket exclusion
             </button>
@@ -353,7 +328,7 @@ export default function DialogMobileBillsPage() {
             <span className="field-hint" style={{ margin: 0 }}>
               {dataBucketRow
                 ? "per eligible employee, split from the selected data bucket connection"
-                : "per eligible employee, from the manual bucket rate"}
+                : "no data bucket number selected — Rs. 0 for everyone"}
             </span>
           </div>
         )}
@@ -551,7 +526,7 @@ export default function DialogMobileBillsPage() {
                   <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
                     <span>Salary Deduction</span>
                     <span style={{ fontSize: 10, fontWeight: 400, textTransform: "none", letterSpacing: "normal", opacity: 0.7 }}>
-                      (VAS + Add To Bill Charges + excess over limit)
+                      (VAS + Add To Bill Charges + excess over Credit Limit)
                     </span>
                   </div>
                 </th>
@@ -771,16 +746,6 @@ export default function DialogMobileBillsPage() {
             rows={normalRows}
             onSave={handleSetLineItemCharges}
             onCancel={() => setShowEditLineItemPanel(false)}
-          />
-        )}
-
-        {showBucketRatePanel && (
-          <DialogMobileBucketRatePanel
-            periodLabel={selectedPeriod.label}
-            currentOverrideCost={selectedPeriod.bucket_cost_override}
-            currentOverrideVat={selectedPeriod.bucket_vat_override}
-            onSave={handleSaveBucketRate}
-            onCancel={() => setShowBucketRatePanel(false)}
           />
         )}
 
