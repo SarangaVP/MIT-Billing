@@ -174,4 +174,5 @@ export interface DialogMobileLineItemChargeUpdateInput {
   vat: number;
   vas: number;
   add_to_bill_charges: number;
+  late_payment_charges: number;
 }

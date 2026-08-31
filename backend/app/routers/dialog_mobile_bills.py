@@ -106,7 +106,7 @@ def set_data_bucket_number(bill_period_id: uuid.UUID, payload: DialogMobileDataB
 def update_line_item_charges(line_item_id: uuid.UUID, payload: DialogMobileLineItemChargeUpdateInput, db: Session = Depends(get_db)):
     """
     Manual correction to a line item's raw charge figures for this bill
-    period ("Manage data bucket" in the UI) — net_amount/total recompute
+    period ("Edit line item" in the UI) — net_amount/total recompute
     automatically from these on the next read.
     """
     return dialog_mobile_bill_service.update_line_item_charges(db, line_item_id, payload)

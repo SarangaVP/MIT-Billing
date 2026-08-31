@@ -70,11 +70,12 @@ class DialogMobileBucketExclusionInput(BaseModel):
 class DialogMobileLineItemChargeUpdateInput(BaseModel):
     """
     Manual correction to a line item's raw charge figures for THIS bill
-    period — used via "Manage data bucket" for cases where a connection's
-    real billed amount needs a manual fix (e.g. a shared/General line's
-    genuine usage charge that should read differently than what the bill
-    parsed). Every field is required, since this replaces the full set
-    that feeds net_amount/total together.
+    period — used via "Edit line item" for any connection whose real
+    billed amount needs a manual fix (e.g. a shared/General line's genuine
+    usage charge that should read differently than what the bill parsed,
+    or any other connection's figures). Every field is required, since
+    this replaces the full set that feeds net_amount/total/salary
+    deduction/Project Working together.
     """
     total_usage_charges: Decimal
     idd: Decimal
@@ -83,6 +84,7 @@ class DialogMobileLineItemChargeUpdateInput(BaseModel):
     vat: Decimal
     vas: Decimal
     add_to_bill_charges: Decimal
+    late_payment_charges: Decimal
 
 
 class DialogMobileBillSummaryRow(BaseModel):

@@ -5,7 +5,7 @@ import DialogMobileBillUploadPanel from "../components/DialogMobileBillUploadPan
 import DialogMobileBucketExclusionPanel from "../components/DialogMobileBucketExclusionPanel";
 import DialogMobileBucketRatePanel from "../components/DialogMobileBucketRatePanel";
 import DialogMobileDataBucketPanel from "../components/DialogMobileDataBucketPanel";
-import DialogMobileManageDataBucketPanel from "../components/DialogMobileManageDataBucketPanel";
+import DialogMobileEditLineItemPanel from "../components/DialogMobileEditLineItemPanel";
 import DialogMobileConfirmPanel from "../components/DialogMobileConfirmPanel";
 import { exportTableToExcel } from "../../utils/exportTable";
 import { exportTeamCostToExcel } from "../../utils/exportTeamCost";
@@ -23,7 +23,7 @@ export default function DialogMobileBillsPage() {
   const [showBucketExclusionPanel, setShowBucketExclusionPanel] = useState(false);
   const [showBucketRatePanel, setShowBucketRatePanel] = useState(false);
   const [showDataBucketPanel, setShowDataBucketPanel] = useState(false);
-  const [showManageDataBucketPanel, setShowManageDataBucketPanel] = useState(false);
+  const [showEditLineItemPanel, setShowEditLineItemPanel] = useState(false);
   const [showBreakdown, setShowBreakdown] = useState(false);
   const [showProjectWorking, setShowProjectWorking] = useState(false);
   const [editingSalaryDeductionId, setEditingSalaryDeductionId] = useState<string | null>(null);
@@ -318,8 +318,8 @@ export default function DialogMobileBillsPage() {
             <button className="btn btn-ghost" onClick={() => setShowBucketExclusionPanel(true)}>
               Manage bucket exclusion
             </button>
-            <button className="btn btn-ghost" onClick={() => setShowManageDataBucketPanel(true)}>
-              Manage data bucket
+            <button className="btn btn-ghost" onClick={() => setShowEditLineItemPanel(true)}>
+              Edit line item
             </button>
             <button className="btn btn-ghost" onClick={() => setShowBreakdown((v) => !v)}>
               {showBreakdown ? "Hide" : "Show"} team cost
@@ -551,7 +551,7 @@ export default function DialogMobileBillsPage() {
                   <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
                     <span>Salary Deduction</span>
                     <span style={{ fontSize: 10, fontWeight: 400, textTransform: "none", letterSpacing: "normal", opacity: 0.7 }}>
-                      (VAS + Add To Bill Charges)
+                      (VAS + Add To Bill Charges + excess over limit)
                     </span>
                   </div>
                 </th>
@@ -766,11 +766,11 @@ export default function DialogMobileBillsPage() {
           />
         )}
 
-        {showManageDataBucketPanel && (
-          <DialogMobileManageDataBucketPanel
+        {showEditLineItemPanel && (
+          <DialogMobileEditLineItemPanel
             rows={normalRows}
             onSave={handleSetLineItemCharges}
-            onCancel={() => setShowManageDataBucketPanel(false)}
+            onCancel={() => setShowEditLineItemPanel(false)}
           />
         )}
 

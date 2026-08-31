@@ -15,9 +15,15 @@ const emptyForm = {
   vat: "",
   vas: "",
   add_to_bill_charges: "",
+  late_payment_charges: "",
 };
 
-export default function DialogMobileManageDataBucketPanel({ rows, onSave, onCancel }: Props) {
+/**
+ * Edits any connection's raw bill figures for THIS bill period — not
+ * restricted to the connection selected as the data bucket number. The
+ * search box below covers every connection in the bill period.
+ */
+export default function DialogMobileEditLineItemPanel({ rows, onSave, onCancel }: Props) {
   const [selectedId, setSelectedId] = useState("");
   const [search, setSearch] = useState("");
   const [showResults, setShowResults] = useState(false);
@@ -50,6 +56,7 @@ export default function DialogMobileManageDataBucketPanel({ rows, onSave, onCanc
       vat: row.vat,
       vas: row.vas,
       add_to_bill_charges: row.add_to_bill_charges,
+      late_payment_charges: row.late_payment_charges,
     });
   }
 
@@ -80,6 +87,7 @@ export default function DialogMobileManageDataBucketPanel({ rows, onSave, onCanc
         vat: Number(form.vat),
         vas: Number(form.vas),
         add_to_bill_charges: Number(form.add_to_bill_charges),
+        late_payment_charges: Number(form.late_payment_charges),
       });
       setSelectedId("");
       setSearch("");
@@ -94,11 +102,12 @@ export default function DialogMobileManageDataBucketPanel({ rows, onSave, onCanc
   return (
     <div className="panel-overlay" onClick={onCancel}>
       <form className="panel" onClick={(e) => e.stopPropagation()} onSubmit={handleSubmit}>
-        <h2>Manage data bucket</h2>
+        <h2>Edit line item</h2>
         <p className="field-hint">
-          Directly corrects a connection's raw charge figures for THIS bill period — Net Amount and Total
-          recalculate automatically from these once saved. Use this for cases like a shared/General line whose
-          real usage charge needs a manual fix.
+          Directly corrects any connection's raw charge figures for THIS bill period — not just the data bucket
+          number. Net Amount, Total, Salary Deduction, and Project Working all recalculate automatically from
+          these once saved. Use this for cases like a shared/General line (or the data bucket connection itself)
+          whose real usage charge needs a manual fix.
         </p>
 
         <label>
@@ -184,10 +193,16 @@ export default function DialogMobileManageDataBucketPanel({ rows, onSave, onCanc
                 <input type="number" step="0.01" required value={form.vat} onChange={(e) => setField("vat", e.target.value)} />
               </label>
             </div>
-            <label>
-              Add To Bill Charges
-              <input type="number" step="0.01" required value={form.add_to_bill_charges} onChange={(e) => setField("add_to_bill_charges", e.target.value)} />
-            </label>
+            <div className="field-row">
+              <label>
+                Add To Bill Charges
+                <input type="number" step="0.01" required value={form.add_to_bill_charges} onChange={(e) => setField("add_to_bill_charges", e.target.value)} />
+              </label>
+              <label>
+                Late Payment Charges
+                <input type="number" step="0.01" required value={form.late_payment_charges} onChange={(e) => setField("late_payment_charges", e.target.value)} />
+              </label>
+            </div>
             <p className="field-hint">
               Net Amount will be Rs.{" "}
               {(Number(form.charges_for_bill_period || 0) - Number(form.vat || 0)).toLocaleString(undefined, { minimumFractionDigits: 2 })}{" "}
