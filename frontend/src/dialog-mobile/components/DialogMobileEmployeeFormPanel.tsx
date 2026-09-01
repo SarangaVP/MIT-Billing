@@ -14,6 +14,7 @@ interface FormState {
   name: string;
   mobile_no: string; // only used when creating
   lob: string;
+  lob_code: string;
   cadre: string;
   level: string;
   credit_limit: string;
@@ -26,6 +27,7 @@ const EMPTY: FormState = {
   name: "",
   mobile_no: "",
   lob: "",
+  lob_code: "",
   cadre: "",
   level: "",
   credit_limit: "",
@@ -42,6 +44,7 @@ export default function DialogMobileEmployeeFormPanel({ employee, onSave, onNumb
           name: employee.name,
           mobile_no: "",
           lob: employee.lob ?? "",
+          lob_code: employee.lob_code ?? "",
           cadre: employee.cadre ?? "",
           level: employee.level ?? "",
           credit_limit: employee.credit_limit != null ? String(employee.credit_limit) : "",
@@ -74,6 +77,7 @@ export default function DialogMobileEmployeeFormPanel({ employee, onSave, onNumb
         emp_no: form.emp_no,
         name: form.name,
         lob: form.lob || null,
+        lob_code: form.lob_code || null,
         cadre: form.cadre || null,
         level: form.level || null,
         credit_limit: form.credit_limit === "" ? null : Number(form.credit_limit),
@@ -161,16 +165,23 @@ export default function DialogMobileEmployeeFormPanel({ employee, onSave, onNumb
             <input value={form.lob} onChange={(e) => update("lob", e.target.value)} placeholder="e.g. Cyber Security" />
           </label>
           <label>
-            Cadre
-            <input value={form.cadre} onChange={(e) => update("cadre", e.target.value)} />
+            LOB Code
+            <input value={form.lob_code} onChange={(e) => update("lob_code", e.target.value)} placeholder="e.g. 81" />
           </label>
         </div>
 
         <div className="field-row">
           <label>
+            Cadre
+            <input value={form.cadre} onChange={(e) => update("cadre", e.target.value)} />
+          </label>
+          <label>
             Level
             <input value={form.level} onChange={(e) => update("level", e.target.value)} placeholder="e.g. L1" />
           </label>
+        </div>
+
+        <div className="field-row">
           <label>
             Credit Limit
             <input
@@ -180,12 +191,11 @@ export default function DialogMobileEmployeeFormPanel({ employee, onSave, onNumb
               onChange={(e) => update("credit_limit", e.target.value)}
             />
           </label>
+          <label>
+            Email
+            <input value={form.email} onChange={(e) => update("email", e.target.value)} />
+          </label>
         </div>
-
-        <label>
-          Email
-          <input value={form.email} onChange={(e) => update("email", e.target.value)} />
-        </label>
 
         <label>
           Resignation

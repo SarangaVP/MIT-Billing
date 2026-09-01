@@ -113,6 +113,7 @@ export default function DialogMobileEmployeesPage() {
               <th>EMP No</th>
               <th>Name</th>
               <th>LOB</th>
+              <th>LOB Code</th>
               <th>Cadre</th>
               <th>Credit Limit</th>
               <th>Level</th>
@@ -124,14 +125,14 @@ export default function DialogMobileEmployeesPage() {
           <tbody>
             {loading && (
               <tr>
-                <td colSpan={10} className="empty-row">
+                <td colSpan={11} className="empty-row">
                   Loading…
                 </td>
               </tr>
             )}
             {!loading && employees.length === 0 && (
               <tr>
-                <td colSpan={10} className="empty-row">
+                <td colSpan={11} className="empty-row">
                   No employees match these filters.
                 </td>
               </tr>
@@ -146,6 +147,7 @@ export default function DialogMobileEmployeesPage() {
                     {emp.is_general_line && <span className="pill pill-transferred" style={{ marginLeft: 8 }}>General Line</span>}
                   </td>
                   <td>{emp.lob || <span className="muted">—</span>}</td>
+                  <td className="mono">{emp.lob_code || <span className="muted">—</span>}</td>
                   <td>{emp.cadre || <span className="muted">—</span>}</td>
                   <td className="mono">
                     {emp.credit_limit != null ? `Rs. ${Number(emp.credit_limit).toLocaleString()}` : "—"}

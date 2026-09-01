@@ -171,17 +171,21 @@ export default function DialogMobileBillsPage() {
   const hasBreakdown = normalRows.some((r) => r.voice_rental !== null);
 
   // Groups every connection's Total by LOB, same pattern as Mobitel/Dialog
-  // Data's own Team Cost breakdown — Dialog Mobile has no separate LOB
-  // code field, so that column is always blank here. The data bucket
+  // Data's own Team Cost breakdown. Confirmed against the real August
+  // Master sheet: a numeric "LOB Code" column now exists directly
+  // alongside the team name (e.g. "Managed Services" = code 81) — grabs
+  // whichever code appears on the first row seen for that team, since
+  // it's the same code for everyone on a given team. The data bucket
   // number is excluded (it's not a normal employee's cost).
   const teamCostRows = Object.entries(
-    normalRows.reduce<Record<string, number>>((acc, row) => {
+    normalRows.reduce<Record<string, { cost: number; code: string | null }>>((acc, row) => {
       const team = row.lob || "Unassigned";
-      acc[team] = (acc[team] || 0) + Number(row.total);
+      if (!acc[team]) acc[team] = { cost: 0, code: row.lob_code };
+      acc[team].cost += Number(row.total);
       return acc;
     }, {})
   )
-    .map(([team, cost]) => ({ team, code: null as string | null, cost }))
+    .map(([team, { cost, code }]) => ({ team, code, cost }))
     .sort((a, b) => a.team.localeCompare(b.team));
   const teamCostTotal = teamCostRows.reduce((sum, r) => sum + r.cost, 0);
 
@@ -355,6 +359,7 @@ export default function DialogMobileBillsPage() {
               <thead>
                 <tr>
                   <th>Team</th>
+                  <th>LOB Code</th>
                   <th>Cost</th>
                 </tr>
               </thead>
@@ -362,11 +367,13 @@ export default function DialogMobileBillsPage() {
                 {teamCostRows.map((r) => (
                   <tr key={r.team}>
                     <td>{r.team}</td>
+                    <td className="mono">{r.code ?? <span className="muted">—</span>}</td>
                     <td className="mono">{money(r.cost)}</td>
                   </tr>
                 ))}
                 <tr className="row-strong">
                   <td>Grand Total</td>
+                  <td></td>
                   <td className="mono">{money(teamCostTotal)}</td>
                 </tr>
               </tbody>
@@ -526,7 +533,7 @@ export default function DialogMobileBillsPage() {
                   <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
                     <span>Salary Deduction</span>
                     <span style={{ fontSize: 10, fontWeight: 400, textTransform: "none", letterSpacing: "normal", opacity: 0.7 }}>
-                      (VAS + Add To Bill Charges + excess over Credit Limit)
+                      (VAS + Add To Bill Charges + excess over limit)
                     </span>
                   </div>
                 </th>

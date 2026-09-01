@@ -107,6 +107,7 @@ def load_main_table_rows(xlsx_path: str) -> list[dict]:
         "emp no": col_map.get("emp no"),
         "name": col_map.get("name"),
         "lob": col_map.get("lob"),
+        "lob code": col_map.get("lob code"),
         "cadre": col_map.get("cadre"),
         "credit limit": col_map.get("credit limit"),
         "level": col_map.get("level"),
@@ -191,6 +192,11 @@ def sync_employee_sheet(db: Session, xlsx_path: str) -> dict:
         clean_name, _ = split_name_and_project_label(clean(source_row["name"]))
         employee.name = synthetic_name if synthetic_name is not None else clean_name
         employee.lob = clean(source_row["lob"])
+        # "LOB Code" arrives as a real number in the sheet (e.g. 81) — text
+        # here, same treatment as emp_no, since the field is a code/label,
+        # not a value ever used in arithmetic. "#N/A" is a genuine real
+        # value for an unmatched row and is kept literally, same as "lob".
+        employee.lob_code = to_text(clean(source_row["lob code"]))
         employee.cadre = clean(source_row["cadre"])
         employee.credit_limit = clean(source_row["credit limit"])
         employee.level = clean(source_row["level"])

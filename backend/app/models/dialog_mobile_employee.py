@@ -20,6 +20,13 @@ class DialogMobileEmployee(Base):
     # an employee can hold more than one number at a time, or none at all.
 
     lob = Column(String, nullable=True)
+    # The numeric business-unit code the source sheet uses alongside the
+    # LOB team name (e.g. "Managed Services" = code 81) — confirmed
+    # present directly as a "LOB Code" column in the Master sheet from
+    # August onward (previously only Dialog Data Bucket had this concept,
+    # via a separate lookup sheet). Stored as text like every other code
+    # field here, since "#N/A" is a genuine real value for unmatched rows.
+    lob_code = Column(String, nullable=True)
     cadre = Column(String, nullable=True)
     credit_limit = Column(Numeric(12, 2), nullable=True)
     level = Column(String, nullable=True)

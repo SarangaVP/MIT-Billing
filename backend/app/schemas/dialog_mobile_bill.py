@@ -98,6 +98,7 @@ class DialogMobileBillSummaryRow(BaseModel):
     emp_no: str | None
     name: str | None
     lob: str | None
+    lob_code: str | None
     cadre: str | None
     credit_limit: Decimal | None
     level: str | None

@@ -20,6 +20,7 @@ export interface DialogMobileEmployee {
   emp_no: string;
   name: string;
   lob: string | null;
+  lob_code: string | null;
   cadre: string | null;
   credit_limit: number | null;
   level: string | null;
@@ -37,6 +38,7 @@ export interface DialogMobileEmployeeCreateInput {
   name: string;
   mobile_no?: string | null; // optional — some employees have no number at all
   lob?: string | null;
+  lob_code?: string | null;
   cadre?: string | null;
   credit_limit?: number | null;
   level?: string | null;
@@ -48,6 +50,7 @@ export interface DialogMobileEmployeeUpdateInput {
   emp_no?: string;
   name?: string;
   lob?: string | null;
+  lob_code?: string | null;
   cadre?: string | null;
   credit_limit?: number | null;
   level?: string | null;
@@ -107,6 +110,7 @@ export interface DialogMobileBillSummaryRow {
   emp_no: string | null;
   name: string | null;
   lob: string | null;
+  lob_code: string | null;
   cadre: string | null;
   credit_limit: string | null;
   level: string | null;

@@ -11,6 +11,7 @@ class DialogMobileEmployeeBase(BaseModel):
     emp_no: str = Field(..., examples=["77959", "PC0007"])
     name: str
     lob: str | None = None
+    lob_code: str | None = None
     cadre: str | None = None
     credit_limit: Decimal | None = None
     level: str | None = None
@@ -31,6 +32,7 @@ class DialogMobileEmployeeUpdate(BaseModel):
     emp_no: str | None = None
     name: str | None = None
     lob: str | None = None
+    lob_code: str | None = None
     cadre: str | None = None
     credit_limit: Decimal | None = None
     level: str | None = None
