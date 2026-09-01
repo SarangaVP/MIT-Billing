@@ -1,6 +1,6 @@
 import uuid
 from datetime import date, datetime
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import Decimal
 
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
@@ -248,18 +248,9 @@ def _build_summary_rows(db: Session, line_items: list[DialogMobileBillLineItem],
             and not li.is_bucket_excluded
         )
         if eligible_count > 0:
-            # Rounding order matters here and is confirmed against the
-            # real source file's own reference "Summary" sheet: Bucket
-            # Cost and Bucket VAT are each independently rounded to the
-            # cent FIRST, and Bucket Nett is derived by subtracting the
-            # two rounded values — NOT computed as its own separately-
-            # rounded division. Doing it any other order (e.g. rounding
-            # Nett and VAT separately, then summing for Cost) can land a
-            # cent off from the reference file on some rows, even though
-            # the unrounded math is equivalent.
-            standard_bucket_cost = (data_bucket_li.charges_for_bill_period / eligible_count).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
-            standard_bucket_vat = (data_bucket_li.vat / eligible_count).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
-            standard_bucket_nett = standard_bucket_cost - standard_bucket_vat
+            standard_bucket_vat = data_bucket_li.vat / eligible_count
+            standard_bucket_nett = (data_bucket_li.charges_for_bill_period - data_bucket_li.vat) / eligible_count
+            standard_bucket_cost = standard_bucket_nett + standard_bucket_vat
         else:
             # No eligible employees to split the pool across this month —
             # nothing to allocate.

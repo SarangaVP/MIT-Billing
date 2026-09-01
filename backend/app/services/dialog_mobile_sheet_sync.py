@@ -25,6 +25,7 @@ line handling, header structure) with import_master_sheet.py —
 kept as a single source of truth so the CLI script and the web upload
 endpoint can never drift apart.
 """
+import re
 import uuid
 
 import openpyxl
@@ -60,8 +61,18 @@ def clean(value):
     if value is None:
         return None
     if isinstance(value, str):
-        value = value.replace("\ufeff", "")
-        if value.strip() == "":
+        # Confirmed real: the Master sheet has whitespace issues on some
+        # text fields — trailing spaces on Cadre (e.g. "Fixed Term "
+        # instead of "Fixed Term"), and potentially doubled-up internal
+        # spaces (e.g. "Fixed  Term"). Both are harmless for display, but
+        # silently broke exact-match comparisons elsewhere (Project
+        # Working's cadre filter uses .includes(), which is whitespace-
+        # sensitive). Stripping the edges AND collapsing any run of
+        # internal whitespace down to a single space means every
+        # downstream exact-match check works correctly regardless of
+        # how many stray spaces ended up in the source cell.
+        value = re.sub(r"\s+", " ", value.replace("\ufeff", "")).strip()
+        if value == "":
             return None
     return value
 

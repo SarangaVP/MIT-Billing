@@ -196,12 +196,23 @@ export default function DialogMobileBillsPage() {
   // hire, wherever they happen to sit organizationally). The data bucket
   // number itself is never eligible here — it's excluded from normalRows
   // already.
+  //
+  // normalizeWhitespace() on both sides is deliberate and confirmed
+  // necessary: the Master sheet has real rows with trailing whitespace on
+  // Cadre (e.g. "Fixed Term " instead of "Fixed Term" — confirmed for
+  // Amila Bandara and Shemali Wijedasa) and could equally have doubled-up
+  // internal spaces (e.g. "Fixed  Term"), either of which silently fails
+  // a plain exact-match check and drops a genuinely-qualifying person
+  // from Project Working with no error. The sheet sync itself now
+  // normalizes on import too, but this guards against whatever's already
+  // stored before that fix takes effect on the next re-upload.
+  const normalizeWhitespace = (value: string) => value.replace(/\s+/g, " ").trim();
   const PROJECT_WORKING_TEAMS = ["Managed Services", "Cyber Security"];
   const PROJECT_WORKING_CADRES = ["Fixed Term", "Consultancy Contract"];
   const projectWorkingRows = normalRows.filter(
     (row) =>
-      (row.lob && PROJECT_WORKING_TEAMS.includes(row.lob)) ||
-      (row.cadre && PROJECT_WORKING_CADRES.includes(row.cadre))
+      (row.lob && PROJECT_WORKING_TEAMS.includes(normalizeWhitespace(row.lob))) ||
+      (row.cadre && PROJECT_WORKING_CADRES.includes(normalizeWhitespace(row.cadre)))
   );
 
   const sum = (key: keyof DialogMobileBillSummaryRow) => filteredRows.reduce((acc, r) => acc + Number(r[key] as string), 0);

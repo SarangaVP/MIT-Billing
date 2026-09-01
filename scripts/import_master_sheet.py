@@ -32,6 +32,7 @@ exactly as it appears in the source sheet.
 Usage:
     python scripts/import_master_sheet.py /path/to/Mobile_bill_July_26.xlsx
 """
+import re
 import sys
 from pathlib import Path
 
@@ -77,14 +78,19 @@ def split_name_and_project_label(raw_name):
 
 
 def clean(value):
-    """Converts a truly empty cell to None, and strips invisible BOM
-    characters (U+FEFF) that appear stuck in some names from copy-pasting.
-    Everything else is left exactly as-is."""
+    """Converts a truly empty cell to None, strips invisible BOM characters
+    (U+FEFF) that appear stuck in some names from copy-pasting, trims
+    leading/trailing whitespace, and collapses any run of internal
+    whitespace down to a single space. Confirmed real: the Master sheet
+    has trailing whitespace on some Cadre values (e.g. "Fixed Term "
+    instead of "Fixed Term") and potentially doubled-up internal spaces
+    (e.g. "Fixed  Term") — harmless for display, but silently broke
+    exact-match comparisons elsewhere (Project Working's cadre filter)."""
     if value is None:
         return None
     if isinstance(value, str):
-        value = value.replace("\ufeff", "")
-        if value.strip() == "":
+        value = re.sub(r"\s+", " ", value.replace("\ufeff", "")).strip()
+        if value == "":
             return None
     return value
 
