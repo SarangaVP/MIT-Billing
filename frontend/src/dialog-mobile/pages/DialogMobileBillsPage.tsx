@@ -338,7 +338,7 @@ export default function DialogMobileBillsPage() {
         )}
 
         {showBreakdown && (
-          <div className="table-wrap" style={{ maxWidth: 460, marginBottom: 20 }}>
+          <div className="table-wrap" style={{ marginBottom: 20 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 12px" }}>
               <strong style={{ fontSize: 13 }}>Team Cost</strong>
               <button
