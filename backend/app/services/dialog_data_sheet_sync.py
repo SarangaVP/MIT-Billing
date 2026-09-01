@@ -11,6 +11,8 @@ Shares its row-parsing logic (header-name column detection for the
 newer/older LOB column formats, "0"/"#N/A" placeholder filtering) with
 import_dialog_data_master.py.
 """
+import re
+
 import openpyxl
 from sqlalchemy.orm import Session
 
@@ -22,7 +24,16 @@ def clean(value):
     if value is None:
         return None
     if isinstance(value, str):
-        cleaned = value.replace("\ufeff", "").strip()
+        # Trims the edges AND collapses any run of internal whitespace
+        # down to a single space (not just .strip()) — confirmed real for
+        # Dialog Mobile's Cadre field (e.g. "Fixed Term " or "Fixed  Term"
+        # instead of "Fixed Term"), which silently broke an exact-match
+        # comparison elsewhere. Applying the same normalization here
+        # protects this module's own Team Cost grouping (which keys
+        # directly off the raw team string) from the identical failure
+        # mode, even though nothing here currently does an exact-match
+        # filter the way Dialog Mobile's Project Working does.
+        cleaned = re.sub(r"\s+", " ", value.replace("\ufeff", "")).strip()
         return cleaned or None
     return value
 
@@ -200,8 +211,8 @@ def sync_dialog_data_sheet(db: Session, xlsx_path: str) -> dict:
                 # different EMP No, a genuine duplicate/typo in the source
                 # sheet — this lookup would still return None and attempt
                 # a second INSERT of the same connection_no, crashing on
-                # the unique constraint instead of correctly falling into
-                # the transfer branch below.
+                # the unique constraint instead of being handled as a
+                # same-sheet duplicate below.
                 connection_by_no[connection_no] = new_conn
                 connections_added += 1
             elif conn.employee_id != employee.id:

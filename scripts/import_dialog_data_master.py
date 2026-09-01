@@ -33,6 +33,7 @@ structure, NOT Mobitel's simpler 1:1 model.
 Usage:
     python scripts/import_dialog_data_master.py /path/to/Dialog_data_Jul26.xlsx
 """
+import re
 import sys
 from pathlib import Path
 
@@ -49,7 +50,7 @@ def clean(value):
     if value is None:
         return None
     if isinstance(value, str):
-        cleaned = value.replace("\ufeff", "").strip()
+        cleaned = re.sub(r"\s+", " ", value.replace("\ufeff", "")).strip()
         return cleaned or None
     return value
 

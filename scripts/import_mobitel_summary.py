@@ -32,6 +32,7 @@ not just skip duplicates blindly.
 Usage:
     python scripts/import_mobitel_summary.py /path/to/Mobitel_Jul26.xlsx
 """
+import re
 import sys
 from pathlib import Path
 
@@ -54,7 +55,7 @@ def clean(value):
     if value is None:
         return None
     if isinstance(value, str):
-        cleaned = value.replace("\ufeff", "").strip()
+        cleaned = re.sub(r"\s+", " ", value.replace("\ufeff", "")).strip()
         return cleaned or None
     return value
 

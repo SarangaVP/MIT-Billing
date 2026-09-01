@@ -11,6 +11,8 @@ Shares its row-parsing logic (header-name column detection for the
 Team/LOB column format change, Pool row handling) with
 import_mobitel_summary.py.
 """
+import re
+
 import openpyxl
 from sqlalchemy.orm import Session
 
@@ -28,7 +30,15 @@ def clean(value):
     if value is None:
         return None
     if isinstance(value, str):
-        cleaned = value.replace("\ufeff", "").strip()
+        # Trims the edges AND collapses any run of internal whitespace
+        # down to a single space (not just .strip()) — confirmed real for
+        # Dialog Mobile's Cadre field (e.g. "Fixed Term " or "Fixed  Term"
+        # instead of "Fixed Term"), which silently broke an exact-match
+        # comparison elsewhere. Applying the same normalization here
+        # protects this module's own Team Cost grouping (which keys
+        # directly off the raw team string) from the identical failure
+        # mode.
+        cleaned = re.sub(r"\s+", " ", value.replace("\ufeff", "")).strip()
         return cleaned or None
     return value
 
