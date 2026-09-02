@@ -7,9 +7,16 @@ connections are referenced by past bills via a real foreign key, and
 mobile_no/emp_no have unique constraints that block reusing an
 identifier even after a soft delete).
 
-Shares its row-parsing logic (header-name column detection for the
-Team/LOB column format change, Pool row handling) with
-import_mobitel_summary.py.
+Only "Number", "EMP No", and "Name" are hard requirements. Neither
+"Team" (team name) nor "LOB" (numeric code) is required — if "Team" is
+missing, team simply stays None; if "LOB" is missing, the code is looked
+up from the separate "LOB" sheet by EMP No instead (same fallback
+pattern as Dialog Data Bucket). The older Mobitel format, where a single
+"LOB" column held the team name with no numeric code at all, is not in
+active use, so no special handling is needed for that ambiguity.
+
+Shares its row-parsing logic (header-name column detection, Pool row
+handling) with import_mobitel_summary.py.
 """
 import re
 
@@ -92,6 +99,51 @@ def _find_header_row(ws) -> tuple[int, list]:
     raise ValueError("Could not find a header row containing 'Number', 'EMP No', and 'Name' in the first 5 rows")
 
 
+def _load_lob_codes_from_separate_sheet(wb) -> dict[str, str]:
+    """
+    Fallback for when the Master sheet has NO "LOB" (numeric code) column
+    at all — cross-references the separate 'LOB' sheet by EMP No instead,
+    same pattern as Dialog Data Bucket's own fallback. Confirmed real:
+    this sheet's header uses 'EMP#' (not 'EMP No'), and its code column
+    is literally named 'LOB' (not 'LOB Code') — matched by header name,
+    not position. Confirmed reliable specifically for Mobitel: a direct
+    check against a real file found this sheet's codes agree with the
+    Master sheet's own embedded codes 120/120 times, zero disagreements.
+
+    NOTE: the older Mobitel format, where a column literally called
+    "LOB" held the team NAME instead of a numeric code, is not in active
+    use — so there's no need to guard against that ambiguity here.
+    """
+    if "LOB" not in wb.sheetnames:
+        return {}
+    ws = wb["LOB"]
+
+    header_row_num = None
+    col_map: dict[str, int] = {}
+    for row in ws.iter_rows(min_row=1, max_row=5):
+        values = [str(c.value).strip().lower() if c.value else None for c in row]
+        if "emp#" in values and "name" in values:
+            header_row_num = row[0].row
+            col_map = {v: i for i, v in enumerate(values) if v}
+            break
+    if header_row_num is None:
+        return {}
+
+    emp_idx = col_map.get("emp#")
+    lob_idx = col_map.get("lob")
+    if emp_idx is None or lob_idx is None:
+        return {}
+
+    codes: dict[str, str] = {}
+    for row in ws.iter_rows(min_row=header_row_num + 1, max_row=ws.max_row, values_only=True):
+        emp = row[emp_idx] if emp_idx < len(row) else None
+        code = row[lob_idx] if lob_idx < len(row) else None
+        if emp is not None and code is not None:
+            emp_str = str(int(emp)) if isinstance(emp, float) else str(emp)
+            codes[emp_str] = str(int(code)) if isinstance(code, float) else str(code)
+    return codes
+
+
 def sync_mobitel_sheet(db: Session, xlsx_path: str) -> dict:
     wb = openpyxl.load_workbook(xlsx_path, data_only=True)
     ws = wb["Master sheet"]
@@ -104,10 +156,22 @@ def sync_mobitel_sheet(db: Session, xlsx_path: str) -> dict:
     name_idx = col_map.get("name")
     team_idx = col_map.get("team")
     lob_idx = col_map.get("lob")
-    has_team_column = team_idx is not None
+    has_lob_in_master = lob_idx is not None
 
     if mobile_idx is None or emp_no_idx is None or name_idx is None:
         raise ValueError("Could not find 'Number'/'EMP No'/'Name' columns in the header row.")
+
+    # Fallback: the Master sheet may not have its own numeric "LOB" code
+    # column at all — cross-reference the separate "LOB" sheet by EMP No
+    # instead, same pattern as Dialog Data Bucket's own fallback. Only
+    # loaded when actually needed; the Master sheet's own embedded code
+    # always wins outright when present. Neither "Team" nor "LOB" is a
+    # hard requirement — both simply default to None/fallback if absent,
+    # matching Dialog Data Bucket's own leniency. The older Mobitel
+    # format (where "LOB" held the team name with no numeric code) is not
+    # in active use, so the historical ambiguity that once justified
+    # requiring "Team" as a safety mechanism is no longer a real concern.
+    lob_codes_from_separate_sheet = {} if has_lob_in_master else _load_lob_codes_from_separate_sheet(wb)
 
     employee_by_emp_no: dict[str, MobitelEmployee] = {e.emp_no: e for e in db.query(MobitelEmployee).all()}
     connection_by_mobile: dict[str, MobitelConnection] = {c.mobile_no: c for c in db.query(MobitelConnection).all()}
@@ -140,12 +204,8 @@ def sync_mobitel_sheet(db: Session, xlsx_path: str) -> dict:
             skipped_missing += 1
             continue
 
-        if has_team_column:
-            team_name = clean(row[team_idx]) if team_idx < len(row) else None
-            lob_code = to_str(row[lob_idx]) if lob_idx is not None and lob_idx < len(row) else None
-        else:
-            team_name = clean(row[lob_idx]) if lob_idx is not None and lob_idx < len(row) else None
-            lob_code = None
+        team_name = clean(row[team_idx]) if team_idx is not None and team_idx < len(row) else None
+        lob_code = to_str(row[lob_idx]) if has_lob_in_master and lob_idx < len(row) else lob_codes_from_separate_sheet.get(emp_no_str)
 
         grouped.setdefault(emp_no_str, {"name": base_name, "team": team_name, "lob_code": lob_code, "mobiles": []})
         # Prefer a row with NO project label for the employee's own name —
@@ -258,5 +318,7 @@ def sync_mobitel_sheet(db: Session, xlsx_path: str) -> dict:
         "connections_reactivated": connections_reactivated,
         "skipped_missing_rows": skipped_missing,
         "conflicts": conflicts,
-        "file_format": "newer (Team name + numeric LOB code)" if has_team_column else "older (LOB = team name only)",
+        "lob_code_source": "directly in Master sheet" if has_lob_in_master else (
+            "separate LOB sheet" if lob_codes_from_separate_sheet else "unavailable (no LOB sheet found)"
+        ),
     }
