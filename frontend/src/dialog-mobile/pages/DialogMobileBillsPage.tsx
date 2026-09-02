@@ -24,6 +24,7 @@ export default function DialogMobileBillsPage() {
   const [showEditLineItemPanel, setShowEditLineItemPanel] = useState(false);
   const [showBreakdown, setShowBreakdown] = useState(false);
   const [showProjectWorking, setShowProjectWorking] = useState(false);
+  const [showSalaryDeductions, setShowSalaryDeductions] = useState(false);
   const [editingSalaryDeductionId, setEditingSalaryDeductionId] = useState<string | null>(null);
   const [salaryDeductionDraft, setSalaryDeductionDraft] = useState("");
   const [savingSalaryDeduction, setSavingSalaryDeduction] = useState(false);
@@ -203,6 +204,14 @@ export default function DialogMobileBillsPage() {
       (row.cadre && PROJECT_WORKING_CADRES.includes(normalizeWhitespace(row.cadre)))
   );
 
+  // Everyone with a non-zero Salary Deduction this month, whether
+  // computed automatically (VAS + Add To Bill Charges + excess over
+  // Credit Limit) or manually overridden — sorted highest deduction
+  // first, since that's the order most useful for payroll review.
+  const salaryDeductionRows = normalRows
+    .filter((row) => Number(row.salary_deduction) > 0)
+    .sort((a, b) => Number(b.salary_deduction) - Number(a.salary_deduction));
+
   const sum = (key: keyof DialogMobileBillSummaryRow) => filteredRows.reduce((acc, r) => acc + Number(r[key] as string), 0);
   const totals = {
     total_usage_charges: sum("total_usage_charges"),
@@ -304,6 +313,9 @@ export default function DialogMobileBillsPage() {
             </button>
             <button className="btn btn-ghost" onClick={() => setShowProjectWorking((v) => !v)}>
               {showProjectWorking ? "Hide" : "Show"} project working
+            </button>
+            <button className="btn btn-ghost" onClick={() => setShowSalaryDeductions((v) => !v)}>
+              {showSalaryDeductions ? "Hide" : "Show"} salary deductions
             </button>
             <button className="btn btn-ghost" onClick={handleExport}>
               Export to Excel
@@ -466,6 +478,74 @@ export default function DialogMobileBillsPage() {
                           0
                         )
                       )}
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {showSalaryDeductions && (
+          <div className="table-wrap" style={{ marginBottom: 20 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 12px" }}>
+              <strong style={{ fontSize: 13 }}>Salary Deductions</strong>
+              <button
+                type="button"
+                className="link-btn"
+                onClick={() =>
+                  exportTableToExcel(
+                    ["Mobile No", "Emp No", "Name", "Team", "Salary Deduction"],
+                    salaryDeductionRows.map((row) => [
+                      row.mobile_no,
+                      row.emp_no ?? "",
+                      row.name ?? "Unmatched number",
+                      row.lob ?? "",
+                      Number(row.salary_deduction),
+                    ]),
+                    `DialogMobile_${selectedPeriod.label.replace(/\s+/g, "_")}_salary_deductions.xlsx`,
+                    "Salary deductions"
+                  )
+                }
+              >
+                Export to Excel
+              </button>
+            </div>
+            <table>
+              <thead>
+                <tr>
+                  <th>Mobile No</th>
+                  <th>Emp No</th>
+                  <th>Name</th>
+                  <th>Team</th>
+                  <th>Salary Deduction</th>
+                </tr>
+              </thead>
+              <tbody>
+                {salaryDeductionRows.length === 0 && (
+                  <tr>
+                    <td colSpan={5} className="empty-row">
+                      No salary deductions this month.
+                    </td>
+                  </tr>
+                )}
+                {salaryDeductionRows.map((row) => (
+                  <tr key={row.bill_line_item_id}>
+                    <td className="mono">{row.mobile_no}</td>
+                    <td className="mono">{row.emp_no || <span className="muted">—</span>}</td>
+                    <td>{row.name || <span className="muted">Unmatched number</span>}</td>
+                    <td>{row.lob || <span className="muted">—</span>}</td>
+                    <td className="mono">{money(row.salary_deduction)}</td>
+                  </tr>
+                ))}
+                {salaryDeductionRows.length > 0 && (
+                  <tr className="row-strong">
+                    <td>Total</td>
+                    <td></td>
+                    <td></td>
+                    <td></td>
+                    <td className="mono">
+                      {money(salaryDeductionRows.reduce((acc, r) => acc + Number(r.salary_deduction), 0))}
                     </td>
                   </tr>
                 )}
