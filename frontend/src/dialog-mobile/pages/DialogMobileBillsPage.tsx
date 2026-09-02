@@ -80,18 +80,6 @@ export default function DialogMobileBillsPage() {
     }
   }
 
-  async function clearSalaryDeductionOverride(lineItemId: string) {
-    setSavingSalaryDeduction(true);
-    try {
-      const updated = await setDialogMobileSalaryDeductionOverride(lineItemId, { salary_deduction_override: null });
-      setSummaryRows((rows) => rows.map((r) => (r.bill_line_item_id === updated.bill_line_item_id ? updated : r)));
-      setEditingSalaryDeductionId(null);
-      setSalaryDeductionDraft("");
-    } finally {
-      setSavingSalaryDeduction(false);
-    }
-  }
-
   async function handleSetBucketExclusion(lineItemId: string, isBucketExcluded: boolean) {
     await setDialogMobileBucketExclusion(lineItemId, { is_bucket_excluded: isBucketExcluded });
     // A single exclusion changes the eligible headcount for the whole
@@ -648,16 +636,6 @@ export default function DialogMobileBillsPage() {
                             </span>
                           )}
                         </span>
-                      )}
-                      {row.is_salary_deduction_overridden && editingSalaryDeductionId !== row.bill_line_item_id && (
-                        <button
-                          type="button"
-                          className="link-btn link-btn-danger"
-                          style={{ display: "block", fontSize: 11, marginTop: 2 }}
-                          onClick={() => clearSalaryDeductionOverride(row.bill_line_item_id)}
-                        >
-                          Reset to computed
-                        </button>
                       )}
                     </td>
                     <td>

@@ -402,6 +402,16 @@ def set_approval_override(db: Session, line_item_id: uuid.UUID, payload: DialogM
         raise HTTPException(status_code=404, detail="Bill line item not found")
 
     line_item.approval_override = payload.approval_override
+    # Manually approving someone as "OK" also zeroes their Salary
+    # Deduction automatically — an "OK" approval means no excess-over-
+    # credit-limit deduction is owed from them, so there's no reason to
+    # require a second manual edit on the Salary Deduction cell as well.
+    # This only fires on this explicit manual override path — it does
+    # NOT affect a connection that's naturally "OK" because its Total is
+    # already under the Credit Limit (that case never had an excess to
+    # deduct in the first place).
+    if payload.approval_override == "OK":
+        line_item.salary_deduction_override = Decimal("0")
     db.commit()
     db.refresh(line_item)
     return get_summary_row_for_line_item(db, line_item_id)
