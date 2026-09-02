@@ -97,6 +97,22 @@ export default function DialogMobileBillUploadPanel({ onImported, onCancel }: Pr
           </div>
         )}
 
+        {result && (result.data_bucket_auto_selected || result.auto_bucket_excluded_mobile_nos.length > 0) && (
+          <div className="banner banner-success">
+            {result.data_bucket_auto_selected && (
+              <div>✓ Data bucket number 765155535 was found and selected automatically for this bill.</div>
+            )}
+            {result.auto_bucket_excluded_mobile_nos.length > 0 && (
+              <div style={{ marginTop: result.data_bucket_auto_selected ? 6 : 0 }}>
+                ✓ {result.auto_bucket_excluded_mobile_nos.length} connection
+                {result.auto_bucket_excluded_mobile_nos.length > 1 ? "s were" : " was"} automatically excluded from
+                the bucket: {result.auto_bucket_excluded_mobile_nos.join(", ")}. Adjustable anytime via "Manage
+                bucket exclusion".
+              </div>
+            )}
+          </div>
+        )}
+
         {result && result.corrupted_value_warnings.length > 0 && (
           <div className="banner banner-error">
             {result.corrupted_value_warnings.length} value{result.corrupted_value_warnings.length > 1 ? "s" : ""} in

@@ -68,6 +68,20 @@ def _parse_date(value: str | None, fmt: str) -> date | None:
     return datetime.strptime(value, fmt).date()
 
 
+# Confirmed to be the same connection every month so far — automatically
+# selected as the data bucket number on import instead of requiring a
+# manual click every time. Still fully changeable afterward via "Change
+# data bucket number" if a future month ever needs something different.
+DEFAULT_DATA_BUCKET_MOBILE_NO = "765155535"
+
+# Security 1 / Security 3 / Security 4 — confirmed real "General" lines
+# with no genuine per-employee usage pattern, manually excluded from the
+# bucket every month in the reference file. Automatically excluded on
+# import instead of requiring a manual "Manage bucket exclusion" pass
+# every time. Still fully changeable afterward via that same panel.
+DEFAULT_AUTO_BUCKET_EXCLUDED_MOBILE_NOS = {"761574166", "767045881", "773925759"}
+
+
 def import_bill_file(db: Session, file_path: str, label: str, source_format: str) -> DialogMobileImportResult:
     """
     source_format: "pdf" or "xls". Both produce the same downstream shape —
@@ -103,6 +117,21 @@ def import_bill_file(db: Session, file_path: str, label: str, source_format: str
     # was removed since it's too strict for real-world use.)
     reconciled = stated_total is not None and abs(discrepancy) < Decimal("0.01")
 
+    # Only auto-select/auto-exclude connections that actually EXIST in
+    # THIS month's bill — never silently point data_bucket_mobile_no at a
+    # connection that isn't in the file, and never claim something was
+    # excluded that wasn't really present.
+    mobile_nos_in_bill = {r["mobile_no"] for r in rows}
+    data_bucket_auto_selected = DEFAULT_DATA_BUCKET_MOBILE_NO in mobile_nos_in_bill
+    auto_excluded_mobile_nos = DEFAULT_AUTO_BUCKET_EXCLUDED_MOBILE_NOS & mobile_nos_in_bill
+    if data_bucket_auto_selected:
+        # The data bucket connection itself must also carry
+        # is_bucket_excluded=True — it's the SOURCE of the pool, not a
+        # recipient of it, same rule set_data_bucket_number() applies when
+        # picked manually. Without this it would incorrectly receive a
+        # real slice of its own pool instead of showing Rs. 0.
+        auto_excluded_mobile_nos = auto_excluded_mobile_nos | {DEFAULT_DATA_BUCKET_MOBILE_NO}
+
     bill_period = DialogMobileBillPeriod(
         label=label,
         corporate_code=cover.get("corporate_code"),
@@ -118,6 +147,7 @@ def import_bill_file(db: Session, file_path: str, label: str, source_format: str
         source_format=source_format,
         reconciled=reconciled,
         reconciliation_discrepancy=discrepancy,
+        data_bucket_mobile_no=DEFAULT_DATA_BUCKET_MOBILE_NO if data_bucket_auto_selected else None,
     )
     db.add(bill_period)
     db.flush()
@@ -151,6 +181,7 @@ def import_bill_file(db: Session, file_path: str, label: str, source_format: str
             sms=_safe_numeric_field(mobile_no, "SMS", row.get("sms"), corrupted_warnings),
             data_rental=_safe_numeric_field(mobile_no, "Data Rental", row.get("data_rental"), corrupted_warnings),
             data_usage=_safe_numeric_field(mobile_no, "Data Usage", row.get("data_usage"), corrupted_warnings),
+            is_bucket_excluded=mobile_no in auto_excluded_mobile_nos,
         ))
         corrupted_value_warnings.extend(corrupted_warnings)
 
@@ -166,6 +197,8 @@ def import_bill_file(db: Session, file_path: str, label: str, source_format: str
         reconciliation_discrepancy=discrepancy,
         source_format=source_format,
         corrupted_value_warnings=corrupted_value_warnings,
+        data_bucket_auto_selected=data_bucket_auto_selected,
+        auto_bucket_excluded_mobile_nos=sorted(auto_excluded_mobile_nos),
     )
 
 

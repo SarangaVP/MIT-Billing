@@ -49,6 +49,17 @@ class DialogMobileImportResult(BaseModel):
     # bill, but this is surfaced here so it can be checked/corrected
     # manually via "Edit line item".
     corrupted_value_warnings: list[str] = []
+    # True when the usual data bucket connection (765155535) was found in
+    # this month's bill and automatically selected — no manual "Select
+    # data bucket number" click needed. False means it wasn't present this
+    # month and still needs to be picked manually (or a different
+    # connection selected instead).
+    data_bucket_auto_selected: bool = False
+    # Mobile numbers automatically marked bucket-excluded this import —
+    # the recurring Security 1/3/4 "General" lines, plus the data bucket
+    # connection itself if data_bucket_auto_selected is True. Still fully
+    # editable afterward via "Manage bucket exclusion".
+    auto_bucket_excluded_mobile_nos: list[str] = []
 
 
 class DialogMobileApprovalOverrideInput(BaseModel):

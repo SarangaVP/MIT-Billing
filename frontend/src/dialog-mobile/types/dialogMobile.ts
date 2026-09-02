@@ -101,6 +101,13 @@ export interface DialogMobileImportResult {
   // so the import could still complete without dropping the connection
   // from the bill. Empty in the normal case.
   corrupted_value_warnings: string[];
+  // True when the usual data bucket connection (765155535) was found and
+  // automatically selected for this bill period — no manual click needed.
+  data_bucket_auto_selected: boolean;
+  // Mobile numbers automatically marked bucket-excluded on import (the
+  // recurring Security 1/3/4 lines, plus the data bucket connection
+  // itself if selected). Still fully editable via "Manage bucket exclusion".
+  auto_bucket_excluded_mobile_nos: string[];
 }
 
 export interface DialogMobileBillSummaryRow {
