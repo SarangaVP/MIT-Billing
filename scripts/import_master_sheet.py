@@ -101,6 +101,48 @@ def to_text(value):
     return str(value)
 
 
+def _load_lob_codes_from_separate_sheet(wb) -> dict[str, str]:
+    """
+    Fallback for when the Master sheet has NO "LOB Code" column of its
+    own at all (the whole column missing, not just individual blank
+    cells) — cross-references the separate 'LOB' sheet by EMP No instead.
+    Confirmed real: this sheet's header uses 'EMP#' (not 'EMP No'), and
+    its code column is literally named 'LOB' (not 'LOB Code') — matched
+    by header name, not position, same defensive pattern used elsewhere
+    in this file. Also confirmed real: this sheet only covers a subset of
+    employees (roughly 65% of a typical Master sheet in practice) —
+    anyone not present here simply gets no LOB code from this fallback.
+    """
+    if "LOB" not in wb.sheetnames:
+        return {}
+    ws = wb["LOB"]
+
+    header_row_num = None
+    col_map: dict[str, int] = {}
+    for row in ws.iter_rows(min_row=1, max_row=5):
+        values = [str(c.value).strip().lower() if c.value else None for c in row]
+        if "emp#" in values and "name" in values:
+            header_row_num = row[0].row
+            col_map = {v: i for i, v in enumerate(values) if v}
+            break
+    if header_row_num is None:
+        return {}
+
+    emp_idx = col_map.get("emp#")
+    lob_idx = col_map.get("lob")
+    if emp_idx is None or lob_idx is None:
+        return {}
+
+    codes: dict[str, str] = {}
+    for row in ws.iter_rows(min_row=header_row_num + 1, max_row=ws.max_row, values_only=True):
+        emp = row[emp_idx] if emp_idx < len(row) else None
+        code = row[lob_idx] if lob_idx < len(row) else None
+        if emp is not None and code is not None:
+            emp_str = str(int(emp)) if isinstance(emp, float) else str(emp)
+            codes[emp_str] = str(int(code)) if isinstance(code, float) else str(code)
+    return codes
+
+
 def load_main_table_rows(xlsx_path: str) -> list[dict]:
     """
     Returns a list of dicts (one per real data row), keyed by normalized
@@ -165,7 +207,26 @@ def load_main_table_rows(xlsx_path: str) -> list[dict]:
             for field, idx in field_columns.items()
         }
 
-    return [row_to_dict(row) for row in main_rows]
+    rows = [row_to_dict(row) for row in main_rows]
+
+    # Fallback: only when the Master sheet has NO "LOB Code" column at
+    # all — if the column exists, whatever's in it (including a blank
+    # cell for a given row) is used as-is and this fallback never runs.
+    # Confirmed real: the Master sheet's own value and this separate
+    # sheet's value can occasionally disagree for the same employee, so
+    # once the Master sheet has its own column, it always wins outright
+    # rather than being cross-checked cell-by-cell.
+    if field_columns["lob code"] is None:
+        lob_codes_by_emp_no = _load_lob_codes_from_separate_sheet(wb)
+        if lob_codes_by_emp_no:
+            for row in rows:
+                emp_no = row.get("emp no")
+                if emp_no is None:
+                    continue
+                emp_no_str = str(int(emp_no)) if isinstance(emp_no, float) else str(emp_no)
+                row["lob code"] = lob_codes_by_emp_no.get(emp_no_str)
+
+    return rows
 
 
 def main(xlsx_path: str):
