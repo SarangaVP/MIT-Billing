@@ -76,15 +76,24 @@ export default function DialogDataBillsPage() {
     v == null ? "—" : `Rs. ${Number(v).toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
   const hasUsageData = summaryRows.some((r) => r.allocation_gb !== null);
 
+  // Groups every connection's Cost by LOB CODE, not team name — more
+  // reliable than grouping by the name text. Confirmed real cases in
+  // this same LOB reference data (shared with Dialog Mobile/Mobitel)
+  // where a team name label can be stale even after an employee's code
+  // was corrected, and where the same team name mapped to two different
+  // codes historically. Falls back to grouping by name only for the
+  // rare employee with no code at all, so they aren't dropped into a
+  // single generic "Unassigned" bucket if a real team name is still
+  // available.
   const teamCostRows = Object.entries(
-    summaryRows.reduce<Record<string, { cost: number; code: string | null }>>((acc, row) => {
-      const team = row.team || "Unassigned";
-      if (!acc[team]) acc[team] = { cost: 0, code: row.lob_code };
-      acc[team].cost += Number(row.cost);
+    summaryRows.reduce<Record<string, { cost: number; code: string | null; team: string }>>((acc, row) => {
+      const groupKey = row.lob_code ? `code:${row.lob_code}` : `name:${row.team || "Unassigned"}`;
+      if (!acc[groupKey]) acc[groupKey] = { cost: 0, code: row.lob_code, team: row.team || "Unassigned" };
+      acc[groupKey].cost += Number(row.cost);
       return acc;
     }, {})
   )
-    .map(([team, { cost, code }]) => ({ team, cost, code }))
+    .map(([, { team, cost, code }]) => ({ team, cost, code }))
     .sort((a, b) => a.team.localeCompare(b.team));
   const teamCostTotal = teamCostRows.reduce((sum, r) => sum + r.cost, 0);
   const sumOfLineItems = summaryRows.reduce((sum, r) => sum + Number(r.cost), 0);

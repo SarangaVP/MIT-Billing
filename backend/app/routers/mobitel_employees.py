@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.schemas.mobitel_employee import (
     MobitelEmployeeCreate, MobitelEmployeeUpdate, MobitelEmployeeOut, MobitelConnectionCreate,
+    MobitelConnectionOut, MobitelConnectionDefaultStaticIpInput,
 )
 from app.services import mobitel_employee_service
 from app.services.mobitel_sheet_sync import sync_mobitel_sheet
@@ -44,6 +45,16 @@ def add_connection(employee_id: uuid.UUID, payload: MobitelConnectionCreate, db:
 @router.delete("/connections/{connection_id}", status_code=204)
 def remove_connection(connection_id: uuid.UUID, db: Session = Depends(get_db)):
     mobitel_employee_service.remove_connection(db, connection_id)
+
+
+@router.put("/connections/{connection_id}/default-static-ip-cost", response_model=MobitelConnectionOut)
+def set_default_static_ip_cost(connection_id: uuid.UUID, payload: MobitelConnectionDefaultStaticIpInput, db: Session = Depends(get_db)):
+    """
+    Sets a persistent static IP cost applied automatically on every
+    future bill import for this connection (e.g. 711434957 always
+    carries Rs. 1500) — doesn't touch already-imported bill periods.
+    """
+    return mobitel_employee_service.set_default_static_ip_cost(db, connection_id, payload.default_static_ip_cost)
 
 
 @router.post("/import")

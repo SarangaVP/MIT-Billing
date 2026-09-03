@@ -1,8 +1,8 @@
-from app.models.employee import Employee
-from app.models.employee_audit_log import EmployeeAuditLog
-from app.models.mobile_number import MobileNumber, MobileNumberStatus
-from app.models.bill_period import BillPeriod
-from app.models.bill_line_item import BillLineItem
+from app.models.dialog_mobile_employee import DialogMobileEmployee
+from app.models.dialog_mobile_employee_audit_log import DialogMobileEmployeeAuditLog
+from app.models.dialog_mobile_mobile_number import DialogMobileMobileNumber, DialogMobileMobileNumberStatus
+from app.models.dialog_mobile_bill_period import DialogMobileBillPeriod
+from app.models.dialog_mobile_bill_line_item import DialogMobileBillLineItem
 
 from app.models.mobitel_employee import MobitelEmployee
 from app.models.mobitel_connection import MobitelConnection, MobitelConnectionStatus
@@ -21,12 +21,12 @@ from app.models.slt_general_bill_period import SltGeneralBillPeriod
 from app.models.slt_general_bill_line_item import SltGeneralBillLineItem
 
 __all__ = [
-    "Employee",
-    "EmployeeAuditLog",
-    "MobileNumber",
-    "MobileNumberStatus",
-    "BillPeriod",
-    "BillLineItem",
+    "DialogMobileEmployee",
+    "DialogMobileEmployeeAuditLog",
+    "DialogMobileMobileNumber",
+    "DialogMobileMobileNumberStatus",
+    "DialogMobileBillPeriod",
+    "DialogMobileBillLineItem",
     "MobitelEmployee",
     "MobitelConnection",
     "MobitelConnectionStatus",

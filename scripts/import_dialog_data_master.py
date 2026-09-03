@@ -33,6 +33,7 @@ structure, NOT Mobitel's simpler 1:1 model.
 Usage:
     python scripts/import_dialog_data_master.py /path/to/Dialog_data_Jul26.xlsx
 """
+import re
 import sys
 from pathlib import Path
 
@@ -49,7 +50,7 @@ def clean(value):
     if value is None:
         return None
     if isinstance(value, str):
-        cleaned = value.replace("\ufeff", "").strip()
+        cleaned = re.sub(r"\s+", " ", value.replace("\ufeff", "")).strip()
         return cleaned or None
     return value
 
@@ -173,6 +174,15 @@ def main(xlsx_path: str):
             connection_no_clean, emp_no_clean, name_clean, team_clean = (
                 clean(connection_no), clean(emp_no), clean(name), clean(team)
             )
+
+            # Some rows have the literal text "No" typed into Connection No,
+            # meaning "no connection assigned" rather than a real number —
+            # confirmed by a real duplicate-key crash when two different
+            # employees both had the literal string "No" here. Treat it as
+            # missing, same as blank/0/#N/A elsewhere in this script.
+            if isinstance(connection_no_clean, str) and connection_no_clean.strip().lower() == "no":
+                connection_no_clean = None
+
             if not connection_no_clean or not emp_no_clean or not name_clean:
                 skipped_missing += 1
                 continue

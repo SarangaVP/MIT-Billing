@@ -7,10 +7,19 @@ connections are referenced by past bills via a real foreign key, and
 mobile_no/emp_no have unique constraints that block reusing an
 identifier even after a soft delete).
 
-Shares its row-parsing logic (header-name column detection for the
-Team/LOB column format change, Pool row handling) with
-import_mobitel_summary.py.
+Only "Number", "EMP No", and "Name" are hard requirements. Neither
+"Team" (team name) nor "LOB" (numeric code) is required — if "Team" is
+missing, team simply stays None; if "LOB" is missing, the code is looked
+up from the separate "LOB" sheet by EMP No instead (same fallback
+pattern as Dialog Data Bucket). The older Mobitel format, where a single
+"LOB" column held the team name with no numeric code at all, is not in
+active use, so no special handling is needed for that ambiguity.
+
+Shares its row-parsing logic (header-name column detection, Pool row
+handling) with import_mobitel_summary.py.
 """
+import re
+
 import openpyxl
 from sqlalchemy.orm import Session
 
@@ -28,7 +37,15 @@ def clean(value):
     if value is None:
         return None
     if isinstance(value, str):
-        cleaned = value.replace("\ufeff", "").strip()
+        # Trims the edges AND collapses any run of internal whitespace
+        # down to a single space (not just .strip()) — confirmed real for
+        # Dialog Mobile's Cadre field (e.g. "Fixed Term " or "Fixed  Term"
+        # instead of "Fixed Term"), which silently broke an exact-match
+        # comparison elsewhere. Applying the same normalization here
+        # protects this module's own Team Cost grouping (which keys
+        # directly off the raw team string) from the identical failure
+        # mode.
+        cleaned = re.sub(r"\s+", " ", value.replace("\ufeff", "")).strip()
         return cleaned or None
     return value
 
@@ -38,6 +55,27 @@ def to_str(value) -> str | None:
     if cleaned is None:
         return None
     return str(int(cleaned)) if isinstance(cleaned, float) else str(cleaned)
+
+
+def split_name_and_project_label(raw_name):
+    """
+    Some rows encode a per-connection project allocation directly in the
+    Name column (e.g. "SLA-IPTV Project"), same convention as Dialog
+    Mobile's project_label handling. Keeps the employee's own name clean
+    and consistent, while preserving the per-connection project label as
+    its own field on MobitelConnection.
+    """
+    if raw_name is None:
+        return None, None
+    if not isinstance(raw_name, str):
+        # A Name cell holding a stray number (e.g. an accidental numeric
+        # value or a formula artifact) — treat it as a plain name with no
+        # project label rather than crashing on "-" in <non-string>.
+        raw_name = str(raw_name)
+    if "-" not in raw_name:
+        return raw_name.strip(), None
+    base, _, label = raw_name.partition("-")
+    return base.strip(), label.strip() or None
 
 
 def _build_column_map(header_row) -> dict[str, int]:
@@ -61,6 +99,51 @@ def _find_header_row(ws) -> tuple[int, list]:
     raise ValueError("Could not find a header row containing 'Number', 'EMP No', and 'Name' in the first 5 rows")
 
 
+def _load_lob_codes_from_separate_sheet(wb) -> dict[str, str]:
+    """
+    Fallback for when the Master sheet has NO "LOB" (numeric code) column
+    at all — cross-references the separate 'LOB' sheet by EMP No instead,
+    same pattern as Dialog Data Bucket's own fallback. Confirmed real:
+    this sheet's header uses 'EMP#' (not 'EMP No'), and its code column
+    is literally named 'LOB' (not 'LOB Code') — matched by header name,
+    not position. Confirmed reliable specifically for Mobitel: a direct
+    check against a real file found this sheet's codes agree with the
+    Master sheet's own embedded codes 120/120 times, zero disagreements.
+
+    NOTE: the older Mobitel format, where a column literally called
+    "LOB" held the team NAME instead of a numeric code, is not in active
+    use — so there's no need to guard against that ambiguity here.
+    """
+    if "LOB" not in wb.sheetnames:
+        return {}
+    ws = wb["LOB"]
+
+    header_row_num = None
+    col_map: dict[str, int] = {}
+    for row in ws.iter_rows(min_row=1, max_row=5):
+        values = [str(c.value).strip().lower() if c.value else None for c in row]
+        if "emp#" in values and "name" in values:
+            header_row_num = row[0].row
+            col_map = {v: i for i, v in enumerate(values) if v}
+            break
+    if header_row_num is None:
+        return {}
+
+    emp_idx = col_map.get("emp#")
+    lob_idx = col_map.get("lob")
+    if emp_idx is None or lob_idx is None:
+        return {}
+
+    codes: dict[str, str] = {}
+    for row in ws.iter_rows(min_row=header_row_num + 1, max_row=ws.max_row, values_only=True):
+        emp = row[emp_idx] if emp_idx < len(row) else None
+        code = row[lob_idx] if lob_idx < len(row) else None
+        if emp is not None and code is not None:
+            emp_str = str(int(emp)) if isinstance(emp, float) else str(emp)
+            codes[emp_str] = str(int(code)) if isinstance(code, float) else str(code)
+    return codes
+
+
 def sync_mobitel_sheet(db: Session, xlsx_path: str) -> dict:
     wb = openpyxl.load_workbook(xlsx_path, data_only=True)
     ws = wb["Master sheet"]
@@ -73,10 +156,22 @@ def sync_mobitel_sheet(db: Session, xlsx_path: str) -> dict:
     name_idx = col_map.get("name")
     team_idx = col_map.get("team")
     lob_idx = col_map.get("lob")
-    has_team_column = team_idx is not None
+    has_lob_in_master = lob_idx is not None
 
     if mobile_idx is None or emp_no_idx is None or name_idx is None:
         raise ValueError("Could not find 'Number'/'EMP No'/'Name' columns in the header row.")
+
+    # Fallback: the Master sheet may not have its own numeric "LOB" code
+    # column at all — cross-reference the separate "LOB" sheet by EMP No
+    # instead, same pattern as Dialog Data Bucket's own fallback. Only
+    # loaded when actually needed; the Master sheet's own embedded code
+    # always wins outright when present. Neither "Team" nor "LOB" is a
+    # hard requirement — both simply default to None/fallback if absent,
+    # matching Dialog Data Bucket's own leniency. The older Mobitel
+    # format (where "LOB" held the team name with no numeric code) is not
+    # in active use, so the historical ambiguity that once justified
+    # requiring "Team" as a safety mechanism is no longer a real concern.
+    lob_codes_from_separate_sheet = {} if has_lob_in_master else _load_lob_codes_from_separate_sheet(wb)
 
     employee_by_emp_no: dict[str, MobitelEmployee] = {e.emp_no: e for e in db.query(MobitelEmployee).all()}
     connection_by_mobile: dict[str, MobitelConnection] = {c.mobile_no: c for c in db.query(MobitelConnection).all()}
@@ -102,20 +197,24 @@ def sync_mobitel_sheet(db: Session, xlsx_path: str) -> dict:
             pool_rows.append((mobile_no_str, f"POOL-{mobile_no_str}"))
             continue
 
-        emp_no_str, name_clean = to_str(emp_no), clean(name)
-        if not mobile_no_str or not emp_no_str or not name_clean:
+        emp_no_str = to_str(emp_no)
+        raw_name = clean(name)
+        base_name, project_label = split_name_and_project_label(raw_name)
+        if not mobile_no_str or not emp_no_str or not base_name:
             skipped_missing += 1
             continue
 
-        if has_team_column:
-            team_name = clean(row[team_idx]) if team_idx < len(row) else None
-            lob_code = to_str(row[lob_idx]) if lob_idx is not None and lob_idx < len(row) else None
-        else:
-            team_name = clean(row[lob_idx]) if lob_idx is not None and lob_idx < len(row) else None
-            lob_code = None
+        team_name = clean(row[team_idx]) if team_idx is not None and team_idx < len(row) else None
+        lob_code = to_str(row[lob_idx]) if has_lob_in_master and lob_idx < len(row) else lob_codes_from_separate_sheet.get(emp_no_str)
 
-        grouped.setdefault(emp_no_str, {"name": name_clean, "team": team_name, "lob_code": lob_code, "mobiles": []})
-        grouped[emp_no_str]["mobiles"].append(mobile_no_str)
+        grouped.setdefault(emp_no_str, {"name": base_name, "team": team_name, "lob_code": lob_code, "mobiles": []})
+        # Prefer a row with NO project label for the employee's own name —
+        # same reasoning as Dialog Mobile: a project-labeled row's base
+        # name is usually identical, but this guards against any stray
+        # difference in casing/whitespace across that employee's rows.
+        if project_label is None:
+            grouped[emp_no_str]["name"] = base_name
+        grouped[emp_no_str]["mobiles"].append((mobile_no_str, project_label))
 
     emp_nos_in_upload = set(grouped.keys()) | {syn for _, syn in pool_rows}
     inserted, updated, revived, retired_employees = 0, 0, 0, 0
@@ -147,18 +246,23 @@ def sync_mobitel_sheet(db: Session, xlsx_path: str) -> dict:
                 updated += 1
 
         current_mobiles = {c.mobile_no: c for c in db.query(MobitelConnection).filter(MobitelConnection.employee_id == employee.id).all()}
-        new_mobiles = set(data["mobiles"])
+        new_mobiles = {mobile_no: label for mobile_no, label in data["mobiles"]}
 
-        for mobile_no in new_mobiles:
+        for mobile_no, project_label in new_mobiles.items():
             conn = connection_by_mobile.get(mobile_no)
             if conn is None:
-                db.add(MobitelConnection(employee_id=employee.id, mobile_no=mobile_no, status=MobitelConnectionStatus.active))
+                db.add(MobitelConnection(
+                    employee_id=employee.id, mobile_no=mobile_no,
+                    status=MobitelConnectionStatus.active, project_label=project_label,
+                ))
                 connections_added += 1
             elif conn.employee_id != employee.id:
                 conflicts.append(f"{mobile_no}: claimed by a different employee than EMP {emp_no}")
-            elif conn.status != MobitelConnectionStatus.active:
-                conn.status = MobitelConnectionStatus.active
-                connections_reactivated += 1
+            else:
+                if conn.status != MobitelConnectionStatus.active:
+                    conn.status = MobitelConnectionStatus.active
+                    connections_reactivated += 1
+                conn.project_label = project_label
 
         for mobile_no, conn in current_mobiles.items():
             if mobile_no not in new_mobiles and conn.status == MobitelConnectionStatus.active:
@@ -214,5 +318,7 @@ def sync_mobitel_sheet(db: Session, xlsx_path: str) -> dict:
         "connections_reactivated": connections_reactivated,
         "skipped_missing_rows": skipped_missing,
         "conflicts": conflicts,
-        "file_format": "newer (Team name + numeric LOB code)" if has_team_column else "older (LOB = team name only)",
+        "lob_code_source": "directly in Master sheet" if has_lob_in_master else (
+            "separate LOB sheet" if lob_codes_from_separate_sheet else "unavailable (no LOB sheet found)"
+        ),
     }

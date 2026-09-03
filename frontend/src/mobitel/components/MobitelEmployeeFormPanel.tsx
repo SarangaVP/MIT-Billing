@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
 import type { MobitelEmployee } from "../types/mobitel";
-import { addMobitelConnection, removeMobitelConnection } from "../api/mobitel";
+import { addMobitelConnection, removeMobitelConnection, setMobitelDefaultStaticIpCost } from "../api/mobitel";
 
 interface Props {
   employee: MobitelEmployee | null;
@@ -16,6 +16,7 @@ export default function MobitelEmployeeFormPanel({ employee, onSave, onRefresh, 
   const [lob, setLob] = useState(employee?.lob ?? "");
   const [lobCode, setLobCode] = useState(employee?.lob_code ?? "");
   const [newMobileNo, setNewMobileNo] = useState("");
+  const [staticIpDrafts, setStaticIpDrafts] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -56,6 +57,18 @@ export default function MobitelEmployeeFormPanel({ employee, onSave, onRefresh, 
     onRefresh();
   }
 
+  async function handleSaveDefaultStaticIp(connectionId: string) {
+    const draft = staticIpDrafts[connectionId];
+    const cost = draft === undefined || draft === "" ? null : draft;
+    setError(null);
+    try {
+      await setMobitelDefaultStaticIpCost(connectionId, cost);
+      onRefresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not save default static IP cost");
+    }
+  }
+
   return (
     <div className="panel-overlay" onClick={onCancel}>
       <form className="panel" onClick={(e) => e.stopPropagation()} onSubmit={handleSubmit}>
@@ -94,9 +107,20 @@ export default function MobitelEmployeeFormPanel({ employee, onSave, onRefresh, 
             <span className="field-label">Connections</span>
             {employee.connections.length === 0 && <p className="field-hint">No connections yet.</p>}
             {employee.connections.map((c) => (
-              <div key={c.id} className="inline-row">
+              <div key={c.id} className="inline-row" style={{ flexWrap: "wrap" }}>
                 <span className="mono">{c.mobile_no}</span>
                 <span className={`pill ${c.status === "active" ? "pill-active" : "pill-resigned"}`}>{c.status}</span>
+                <input
+                  type="number"
+                  step="0.01"
+                  placeholder="Default static IP (Rs.)"
+                  style={{ width: 160 }}
+                  value={staticIpDrafts[c.id] ?? c.default_static_ip_cost ?? ""}
+                  onChange={(e) => setStaticIpDrafts((d) => ({ ...d, [c.id]: e.target.value }))}
+                />
+                <button type="button" className="link-btn" onClick={() => handleSaveDefaultStaticIp(c.id)}>
+                  Save
+                </button>
                 <button type="button" className="link-btn link-btn-danger" onClick={() => handleRemoveConnection(c.id)}>
                   Remove
                 </button>
@@ -113,7 +137,8 @@ export default function MobitelEmployeeFormPanel({ employee, onSave, onRefresh, 
               </button>
             </div>
             <p className="field-hint">
-              An employee can hold more than one connection — each is billed separately.
+              An employee can hold more than one connection — each is billed separately. "Default static IP" is
+              applied automatically to every future bill import for that connection — leave blank for none.
             </p>
           </div>
         )}

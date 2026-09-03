@@ -11,6 +11,8 @@ Shares its row-parsing logic (header-name column detection for the
 newer/older LOB column formats, "0"/"#N/A" placeholder filtering) with
 import_dialog_data_master.py.
 """
+import re
+
 import openpyxl
 from sqlalchemy.orm import Session
 
@@ -22,7 +24,16 @@ def clean(value):
     if value is None:
         return None
     if isinstance(value, str):
-        cleaned = value.replace("\ufeff", "").strip()
+        # Trims the edges AND collapses any run of internal whitespace
+        # down to a single space (not just .strip()) — confirmed real for
+        # Dialog Mobile's Cadre field (e.g. "Fixed Term " or "Fixed  Term"
+        # instead of "Fixed Term"), which silently broke an exact-match
+        # comparison elsewhere. Applying the same normalization here
+        # protects this module's own Team Cost grouping (which keys
+        # directly off the raw team string) from the identical failure
+        # mode, even though nothing here currently does an exact-match
+        # filter the way Dialog Mobile's Project Working does.
+        cleaned = re.sub(r"\s+", " ", value.replace("\ufeff", "")).strip()
         return cleaned or None
     return value
 
@@ -117,6 +128,10 @@ def sync_dialog_data_sheet(db: Session, xlsx_path: str) -> dict:
 
     employee_by_emp_no: dict[str, DialogDataEmployee] = {e.emp_no: e for e in db.query(DialogDataEmployee).all()}
     connection_by_no: dict[str, DialogDataConnection] = {c.connection_no: c for c in db.query(DialogDataConnection).all()}
+    # Tracks emp_no by employee id so a transfer can be reported as
+    # "moved from EMP X to EMP Y" — kept in sync whenever an employee is
+    # looked up or newly created below.
+    emp_no_by_employee_id: dict = {e.id: e.emp_no for e in employee_by_emp_no.values()}
 
     grouped: dict[str, dict] = {}
     skipped_missing = 0
@@ -131,6 +146,18 @@ def sync_dialog_data_sheet(db: Session, xlsx_path: str) -> dict:
             continue
 
         connection_no_clean, emp_no_clean, name_clean, team_clean = clean(connection_no), clean(emp_no), clean(name), clean(team)
+
+        # Some rows in the real sheet have the literal text "No" typed into
+        # the Connection No column — meaning "this employee has no
+        # connection assigned" rather than an actual connection number.
+        # Confirmed by a real crash: two different employees both had the
+        # literal string "No" here, and since it isn't empty it was being
+        # treated as if it were one real, shared connection identifier,
+        # violating the unique constraint on the second insert. Treat it
+        # as missing, same as blank/0/#N/A are treated elsewhere in this file.
+        if isinstance(connection_no_clean, str) and connection_no_clean.strip().lower() == "no":
+            connection_no_clean = None
+
         if not connection_no_clean or not emp_no_clean or not name_clean:
             skipped_missing += 1
             continue
@@ -145,8 +172,8 @@ def sync_dialog_data_sheet(db: Session, xlsx_path: str) -> dict:
 
     emp_nos_in_upload = set(grouped.keys())
     inserted, updated, revived, retired_employees = 0, 0, 0, 0
-    connections_added, connections_retired, connections_reactivated = 0, 0, 0
-    conflicts: list[str] = []
+    connections_added, connections_retired, connections_reactivated, connections_transferred = 0, 0, 0, 0
+    transfers: list[str] = []
 
     for emp_no, data in grouped.items():
         existing = employee_by_emp_no.get(emp_no)
@@ -155,6 +182,7 @@ def sync_dialog_data_sheet(db: Session, xlsx_path: str) -> dict:
             db.add(employee)
             db.flush()
             employee_by_emp_no[emp_no] = employee
+            emp_no_by_employee_id[employee.id] = emp_no
             inserted += 1
         else:
             employee = existing
@@ -175,10 +203,32 @@ def sync_dialog_data_sheet(db: Session, xlsx_path: str) -> dict:
         for connection_no in new_connections:
             conn = connection_by_no.get(connection_no)
             if conn is None:
-                db.add(DialogDataConnection(employee_id=employee.id, connection_no=connection_no, status=DialogDataConnectionStatus.active))
+                new_conn = DialogDataConnection(employee_id=employee.id, connection_no=connection_no, status=DialogDataConnectionStatus.active)
+                db.add(new_conn)
+                # CRITICAL: register the brand-new connection back into the
+                # cache immediately. Without this, if the SAME connection
+                # number appears again later in this same upload — under a
+                # different EMP No, a genuine duplicate/typo in the source
+                # sheet — this lookup would still return None and attempt
+                # a second INSERT of the same connection_no, crashing on
+                # the unique constraint instead of being handled as a
+                # same-sheet duplicate below.
+                connection_by_no[connection_no] = new_conn
                 connections_added += 1
             elif conn.employee_id != employee.id:
-                conflicts.append(f"{connection_no}: claimed by a different employee than EMP {emp_no}")
+                # The sheet says this connection now belongs to a
+                # different employee than our records show — auto-transfer
+                # it rather than just flagging a conflict. This is safe to
+                # do automatically because past bills read a FROZEN
+                # snapshot of who they were billed to at import time (see
+                # DialogDataBillLineItem), not this live employee_id — so
+                # reassigning it here only affects bills imported from now
+                # on, never anything already imported.
+                previous_emp_no = emp_no_by_employee_id.get(conn.employee_id, "unknown")
+                conn.employee_id = employee.id
+                conn.status = DialogDataConnectionStatus.active
+                transfers.append(f"{connection_no}: transferred from EMP {previous_emp_no} to EMP {emp_no}")
+                connections_transferred += 1
             elif conn.status != DialogDataConnectionStatus.active:
                 conn.status = DialogDataConnectionStatus.active
                 connections_reactivated += 1
@@ -203,7 +253,8 @@ def sync_dialog_data_sheet(db: Session, xlsx_path: str) -> dict:
         "connections_added": connections_added,
         "connections_retired": connections_retired,
         "connections_reactivated": connections_reactivated,
+        "connections_transferred": connections_transferred,
         "skipped_missing_rows": skipped_missing,
-        "conflicts": conflicts,
+        "transfers": transfers,
         "lob_source": "directly in Master sheet" if has_lob_in_master else "separate LOB sheet (older format)",
     }

@@ -8,6 +8,7 @@ export interface MobitelConnection {
   id: string;
   mobile_no: string;
   status: MobitelConnectionStatus;
+  default_static_ip_cost: string | null;
 }
 
 export interface MobitelEmployee {
@@ -56,6 +57,7 @@ export interface MobitelBillPeriod {
   per_user_cost: string | null;
   reconciled: boolean;
   reconciliation_discrepancy: string | null;
+  bucket_total_gb: string;
   created_at: string;
 }
 
@@ -84,6 +86,7 @@ export interface MobitelBillLineItemOut {
   static_ip_cost: string;
   is_project_cost: boolean;
   project_cost_amount: string | null;
+  project_label: string | null;
   total: string;
   imsi_number: string | null;
   data_volume_mb: string | null;

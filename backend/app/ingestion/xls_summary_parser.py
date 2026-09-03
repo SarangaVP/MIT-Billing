@@ -51,6 +51,19 @@ COVER_LABELS = {
 }
 
 
+def _normalize_header(value) -> str:
+    """Same normalization used everywhere else in this project for header
+    matching (dialog_mobile_sheet_sync.py, dialog_data_sheet_sync.py,
+    mobitel_sheet_sync.py) — strip whitespace, lowercase. Applying it here
+    too closes a real gap: this file previously matched header text with
+    a bare `==`, which would silently mis-parse (see below) on a stray
+    space or case change in Dialog's own export, exactly the class of bug
+    already confirmed and fixed for Cadre/LOB text elsewhere."""
+    if value is None:
+        return ""
+    return str(value).strip().lower()
+
+
 def _mobile_no_to_text(value) -> str:
     if isinstance(value, float):
         return str(int(value))
@@ -58,8 +71,19 @@ def _mobile_no_to_text(value) -> str:
 
 
 def find_header_row(sheet) -> int:
+    """
+    Searches every row (the cover page before this can run well past 10
+    rows, so there's no fixed cap here) for a row that CONTAINS the
+    normalized "Mobile No" marker anywhere in it — not fixed to column 0.
+    Confirmed real risk this replaces: matching only column 0 with a bare
+    `==` would break outright on a harmless column reordering or a
+    trailing-space export quirk, even though the header row itself would
+    still be perfectly readable by a human looking at the file.
+    """
+    marker = _normalize_header(HEADER_MARKER)
     for r in range(sheet.nrows):
-        if sheet.cell_value(r, 0) == HEADER_MARKER:
+        row_values = [_normalize_header(v) for v in sheet.row_values(r)]
+        if marker in row_values:
             return r
     raise ValueError(f"Could not find the '{HEADER_MARKER}' header row in this .xls file")
 
@@ -93,7 +117,40 @@ def parse_summary_table(xls_path: str) -> list[dict]:
 
     header_row = find_header_row(sheet)
     header = sheet.row_values(header_row)
-    col_index = {name: i for i, name in enumerate(header) if name in FIELD_MAP or name == "Mobile No"}
+
+    # Normalized lookup: every FIELD_MAP key (plus the Mobile No marker
+    # itself) matched against the ACTUAL header text via the same
+    # strip+lowercase normalization used for the header ROW search above,
+    # instead of the previous bare `==`. This still closes a real gap —
+    # a trailing space or case change on a column header no longer
+    # silently drops that column — while deliberately NOT requiring every
+    # column to be present (see below): Dialog's own export format can
+    # legitimately change between months.
+    normalized_field_map = {_normalize_header(k): v for k, v in FIELD_MAP.items()}
+    normalized_mobile_marker = _normalize_header(HEADER_MARKER)
+
+    col_index: dict[str, int] = {}
+    for i, name in enumerate(header):
+        normalized = _normalize_header(name)
+        if normalized == normalized_mobile_marker:
+            col_index["Mobile No"] = i
+        elif normalized in normalized_field_map:
+            # Map back to the FIELD_MAP's own original key so the rest of
+            # this function (which still keys off FIELD_MAP.items()) is
+            # unchanged below.
+            original_key = next(k for k in FIELD_MAP if _normalize_header(k) == normalized)
+            col_index[original_key] = i
+
+    if "Mobile No" not in col_index:
+        raise ValueError("Found a header row, but could not locate the 'Mobile No' column within it")
+
+    # Deliberately NOT a hard requirement that every FIELD_MAP column be
+    # present: Dialog's own export format can genuinely add/rename/drop
+    # columns between months, and a missing optional field should degrade
+    # gracefully (that column's value falls back to 0 downstream via
+    # row.get(field_name, 0) in the bill service) rather than blocking
+    # the whole import. Only Mobile No — the one column every single row
+    # depends on to exist at all — is a hard requirement.
 
     rows = []
     for r in range(header_row + 1, sheet.nrows):

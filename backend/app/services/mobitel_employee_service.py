@@ -85,3 +85,18 @@ def remove_connection(db: Session, connection_id: uuid.UUID) -> None:
         raise HTTPException(status_code=404, detail="Connection not found")
     connection.is_deleted = True
     db.commit()
+
+
+def set_default_static_ip_cost(db: Session, connection_id: uuid.UUID, cost) -> MobitelConnection:
+    """
+    Sets (or clears, if cost is None) a persistent static IP cost that
+    gets applied automatically to every FUTURE bill import for this
+    connection — doesn't touch any bill period already imported.
+    """
+    connection = db.query(MobitelConnection).filter(MobitelConnection.id == connection_id).first()
+    if not connection:
+        raise HTTPException(status_code=404, detail="Connection not found")
+    connection.default_static_ip_cost = cost
+    db.commit()
+    db.refresh(connection)
+    return connection

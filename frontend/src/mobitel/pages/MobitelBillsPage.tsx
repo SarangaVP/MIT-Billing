@@ -1,9 +1,10 @@
 import { useEffect, useState, useCallback } from "react";
 import type { MobitelBillPeriod, MobitelBillLineItemOut } from "../types/mobitel";
-import { listMobitelBillPeriods, getMobitelBillSummary, setMobitelStaticIpCost, setMobitelProjectCost, deleteMobitelBillPeriod } from "../api/mobitel";
+import { listMobitelBillPeriods, getMobitelBillSummary, setMobitelStaticIpCost, setMobitelProjectCost, setMobitelBucketTotalGb, deleteMobitelBillPeriod } from "../api/mobitel";
 import MobitelBillUploadPanel from "../components/MobitelBillUploadPanel";
 import MobitelManageStaticIpPanel from "../components/MobitelManageStaticIpPanel";
 import MobitelManageProjectCostPanel from "../components/MobitelManageProjectCostPanel";
+import MobitelBucketTotalGbPanel from "../components/MobitelBucketTotalGbPanel";
 import MobitelConfirmPanel from "../components/MobitelConfirmPanel";
 import { exportTeamCostToExcel } from "../../utils/exportTeamCost";
 import { exportTableToExcel } from "../../utils/exportTable";
@@ -18,6 +19,7 @@ export default function MobitelBillsPage() {
   const [search, setSearch] = useState("");
   const [showStaticIpPanel, setShowStaticIpPanel] = useState(false);
   const [showProjectCostPanel, setShowProjectCostPanel] = useState(false);
+  const [showBucketTotalGbPanel, setShowBucketTotalGbPanel] = useState(false);
   const [deletingPeriod, setDeletingPeriod] = useState<MobitelBillPeriod | null>(null);
   const [showBreakdown, setShowBreakdown] = useState(false);
 
@@ -70,6 +72,17 @@ export default function MobitelBillsPage() {
     }
   }
 
+  async function handleSetBucketTotalGb(bucketTotalGb: string) {
+    if (!selectedPeriod) return;
+    const rows = await setMobitelBucketTotalGb(selectedPeriod.id, bucketTotalGb);
+    setSummaryRows(rows);
+    setShowBucketTotalGbPanel(false);
+    const refreshedPeriods = await listMobitelBillPeriods();
+    setPeriods(refreshedPeriods);
+    const refreshed = refreshedPeriods.find((p) => p.id === selectedPeriod.id);
+    if (refreshed) setSelectedPeriod(refreshed);
+  }
+
   async function handleDeletePeriod() {
     if (!deletingPeriod) return;
     await deleteMobitelBillPeriod(deletingPeriod.id);
@@ -92,20 +105,24 @@ export default function MobitelBillsPage() {
   const mb = (v: string | number | null) => (v == null ? "—" : `${Number(v).toLocaleString()} Mb`);
   const hasUsageData = summaryRows.some((r) => r.imsi_number !== null);
 
-  // "Team cost" breakdown — groups every employee's Total by LOB, same as
-  // the source Excel's own "Team cost" sheet (verified to reproduce it
-  // exactly, aside from one known Rs. 0.34 manual-correction anomaly that
-  // existed in the original sheet itself). Also carries the numeric LOB
-  // code alongside the team name, when present (only in newer file exports).
+  // "Team cost" breakdown — groups every employee's Total by LOB CODE,
+  // not name. More reliable than grouping by the team name text:
+  // confirmed real cases in this same LOB reference data (shared with
+  // Dialog Mobile) where a team name label can be stale even after an
+  // employee's code was corrected, and where the same team name mapped
+  // to two different codes historically. Falls back to grouping by name
+  // only for the rare employee with no code at all, so they aren't
+  // dropped into a single generic "Unassigned" bucket if a real team
+  // name is still available.
   const teamCostRows = Object.entries(
-    summaryRows.reduce<Record<string, { cost: number; code: string | null }>>((acc, row) => {
-      const team = row.lob || "Unassigned";
-      if (!acc[team]) acc[team] = { cost: 0, code: row.lob_code };
-      acc[team].cost += Number(row.total);
+    summaryRows.reduce<Record<string, { cost: number; code: string | null; team: string }>>((acc, row) => {
+      const groupKey = row.lob_code ? `code:${row.lob_code}` : `name:${row.lob || "Unassigned"}`;
+      if (!acc[groupKey]) acc[groupKey] = { cost: 0, code: row.lob_code, team: row.lob || "Unassigned" };
+      acc[groupKey].cost += Number(row.total);
       return acc;
     }, {})
   )
-    .map(([team, { cost, code }]) => ({ team, cost, code }))
+    .map(([, { team, cost, code }]) => ({ team, cost, code }))
     .sort((a, b) => a.team.localeCompare(b.team));
   const teamCostTotal = teamCostRows.reduce((sum, r) => sum + r.cost, 0);
 
@@ -117,14 +134,14 @@ export default function MobitelBillsPage() {
   function handleExport() {
     if (!selectedPeriod) return;
     const headers = [
-      "EMP No", "Name", "Mobile No", "LOB", "LOB Code",
+      "EMP No", "Name", "Project", "Mobile No", "LOB", "LOB Code",
       ...(hasUsageData
         ? ["IMSI", "Data Allocated (Mb)", "Data Available (Mb)", "Data Utilized (Mb)", "Daily Limit (Mb)", "Member Status"]
         : []),
       "Data Cost", "Project Cost", "Static IP Cost", "Total",
     ];
     const rows = filteredRows.map((row) => [
-      row.emp_no ?? "", row.name ?? "", row.mobile_no ?? "", row.lob ?? "", row.lob_code ?? "",
+      row.emp_no ?? "", row.name ?? "", row.project_label ?? "", row.mobile_no ?? "", row.lob ?? "", row.lob_code ?? "",
       ...(hasUsageData
         ? [
             row.imsi_number ?? "",
@@ -139,7 +156,7 @@ export default function MobitelBillsPage() {
       Number(row.static_ip_cost), Number(row.total),
     ]);
     const totalsRow = [
-      "Total", "", "", "", "",
+      "Total", "", "", "", "", "",
       ...(hasUsageData ? ["", "", "", "", "", ""] : []),
       Number(filteredRows.reduce((s, r) => s + Number(r.data_cost), 0).toFixed(2)),
       "",
@@ -177,6 +194,9 @@ export default function MobitelBillsPage() {
             </button>
             <button className="btn btn-ghost" onClick={() => setShowProjectCostPanel(true)}>
               Manage project cost
+            </button>
+            <button className="btn btn-ghost" onClick={() => setShowBucketTotalGbPanel(true)}>
+              Set bucket total GB
             </button>
             <button className="btn btn-ghost" onClick={() => setShowBreakdown((v) => !v)}>
               {showBreakdown ? "Hide" : "Show"} team cost & reconciliation
@@ -321,7 +341,10 @@ export default function MobitelBillsPage() {
                 filteredRows.map((row) => (
                   <tr key={row.id}>
                     <td className="mono">{row.emp_no}</td>
-                    <td>{row.name}</td>
+                    <td>
+                      {row.name}
+                      {row.project_label && <span className="pill pill-transferred" style={{ marginLeft: 6 }}>{row.project_label}</span>}
+                    </td>
                     <td className="mono">{row.mobile_no}</td>
                     <td>{row.lob || <span className="muted">—</span>}</td>
                     <td className="mono">{row.lob_code || <span className="muted">—</span>}</td>
@@ -360,6 +383,15 @@ export default function MobitelBillsPage() {
             rows={summaryRows}
             onSave={handleSetProjectCost}
             onCancel={() => setShowProjectCostPanel(false)}
+          />
+        )}
+
+        {showBucketTotalGbPanel && (
+          <MobitelBucketTotalGbPanel
+            periodLabel={selectedPeriod.label}
+            currentBucketTotalGb={selectedPeriod.bucket_total_gb}
+            onSave={handleSetBucketTotalGb}
+            onCancel={() => setShowBucketTotalGbPanel(false)}
           />
         )}
       </div>

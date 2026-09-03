@@ -1,7 +1,7 @@
 import uuid
 import enum
 
-from sqlalchemy import Column, String, Boolean, DateTime, Enum, ForeignKey, func
+from sqlalchemy import Column, String, Numeric, Boolean, DateTime, Enum, ForeignKey, func
 
 from app.database import Base
 from app.types import GUID
@@ -29,5 +29,22 @@ class MobitelConnection(Base):
     mobile_no = Column(String, unique=True, nullable=False, index=True)
     status = Column(Enum(MobitelConnectionStatus), nullable=False, default=MobitelConnectionStatus.active)
     is_deleted = Column(Boolean, nullable=False, default=False)
+
+    # Some rows in the Master sheet encode a per-connection project
+    # allocation directly in the Name column (e.g. "SLA-IPTV Project"),
+    # same convention as Dialog Mobile's project_label on MobileNumber.
+    # When set AND a Portal file is uploaded with this month's bill,
+    # the connection's project cost is calculated automatically instead
+    # of the equal per-user split — see mobitel_bill_service.py.
+    project_label = Column(String, nullable=True)
+
+    # A persistent, per-connection static IP cost that should be applied
+    # automatically on EVERY future bill import — used for connections
+    # with a real, unchanging static IP charge every month (confirmed
+    # real case: 711434957 always carries Rs. 1500), so it no longer
+    # needs to be manually re-entered via "Manage static IP" each time.
+    # Still fully editable per bill period afterward if a specific month
+    # genuinely needs a different value.
+    default_static_ip_cost = Column(Numeric(12, 2), nullable=True)
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())

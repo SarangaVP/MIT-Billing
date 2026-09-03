@@ -5,6 +5,7 @@ import type {
   MobitelBillPeriod,
   MobitelImportResult,
   MobitelBillLineItemOut,
+  MobitelConnection,
 } from "../types/mobitel";
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
@@ -55,6 +56,13 @@ export async function removeMobitelConnection(connectionId: string): Promise<voi
   }
 }
 
+export function setMobitelDefaultStaticIpCost(connectionId: string, cost: string | null): Promise<MobitelConnection> {
+  return request<MobitelConnection>(`/mobitel/employees/connections/${connectionId}/default-static-ip-cost`, {
+    method: "PUT",
+    body: JSON.stringify({ default_static_ip_cost: cost }),
+  });
+}
+
 // Bills
 
 export function listMobitelBillPeriods(): Promise<MobitelBillPeriod[]> {
@@ -95,6 +103,13 @@ export function setMobitelProjectCost(lineItemId: string, isProjectCost: boolean
   return request<MobitelBillLineItemOut[]>(`/mobitel/bills/line-items/${lineItemId}/project-cost`, {
     method: "PUT",
     body: JSON.stringify({ is_project_cost: isProjectCost, project_cost_amount: projectCostAmount }),
+  });
+}
+
+export function setMobitelBucketTotalGb(billPeriodId: string, bucketTotalGb: string): Promise<MobitelBillLineItemOut[]> {
+  return request<MobitelBillLineItemOut[]>(`/mobitel/bills/${billPeriodId}/bucket-total-gb`, {
+    method: "PUT",
+    body: JSON.stringify({ bucket_total_gb: bucketTotalGb }),
   });
 }
 

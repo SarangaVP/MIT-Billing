@@ -23,10 +23,15 @@ class MobitelBillPeriodOut(BaseModel):
     per_user_cost: Decimal | None
     reconciled: bool
     reconciliation_discrepancy: Decimal | None
+    bucket_total_gb: Decimal
     extraction_method: str
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class MobitelBucketTotalGbUpdateInput(BaseModel):
+    bucket_total_gb: Decimal
 
 
 class MobitelImportResult(BaseModel):
@@ -63,6 +68,7 @@ class MobitelBillLineItemOut(BaseModel):
     static_ip_cost: Decimal
     is_project_cost: bool = False
     project_cost_amount: Decimal | None = None
+    project_label: str | None = None
     total: Decimal
 
     # Only populated when a Portal sheet was uploaded alongside the PDF

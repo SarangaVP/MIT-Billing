@@ -7,7 +7,7 @@ from pathlib import Path
 from tempfile import NamedTemporaryFile
 
 from app.database import get_db
-from app.schemas.mobitel_bill import MobitelBillPeriodOut, MobitelImportResult, MobitelStaticIpCostUpdateInput, MobitelProjectCostUpdateInput
+from app.schemas.mobitel_bill import MobitelBillPeriodOut, MobitelImportResult, MobitelStaticIpCostUpdateInput, MobitelProjectCostUpdateInput, MobitelBucketTotalGbUpdateInput
 from app.services import mobitel_bill_service
 
 router = APIRouter(prefix="/mobitel/bills", tags=["mobitel-bills"])
@@ -67,3 +67,13 @@ def update_project_cost(line_item_id: uuid.UUID, payload: MobitelProjectCostUpda
     the whole period.
     """
     return mobitel_bill_service.update_project_cost(db, line_item_id, payload.is_project_cost, payload.project_cost_amount)
+
+
+@router.put("/{bill_period_id}/bucket-total-gb")
+def update_bucket_total_gb(bill_period_id: uuid.UUID, payload: MobitelBucketTotalGbUpdateInput, db: Session = Depends(get_db)):
+    """
+    Updates the bucket's total contracted GB for this bill period (default
+    4000) and recalculates every auto-eligible project cost plus the
+    equal split for everyone else.
+    """
+    return mobitel_bill_service.update_bucket_total_gb(db, bill_period_id, payload.bucket_total_gb)
