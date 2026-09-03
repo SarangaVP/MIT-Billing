@@ -159,22 +159,28 @@ export default function DialogMobileBillsPage() {
   const money = (v: string | number) => `Rs. ${Number(v).toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
   const hasBreakdown = normalRows.some((r) => r.voice_rental !== null);
 
-  // Groups every connection's Total by LOB, same pattern as Mobitel/Dialog
-  // Data's own Team Cost breakdown. Confirmed against the real August
-  // Master sheet: a numeric "LOB Code" column now exists directly
-  // alongside the team name (e.g. "Managed Services" = code 81) — grabs
-  // whichever code appears on the first row seen for that team, since
-  // it's the same code for everyone on a given team. The data bucket
-  // number is excluded (it's not a normal employee's cost).
+  // Groups every connection's Total by LOB CODE, not name — more
+  // reliable than grouping by the team name text. Confirmed real cases
+  // where this matters: an employee's team name label can be stale even
+  // after their code was corrected (e.g. EMP 77712 showed "COO Office"
+  // while their code 69 actually belongs to "Audit & Compliance"), and
+  // Dialog Mobile's own "LOB No" lookup table had duplicate team names
+  // mapping to two different codes historically ("Cluster 3" -> both 59
+  // and 36) — grouping by name in either case would silently split or
+  // mislabel what should be one team. Falls back to grouping by name
+  // only for the rare employee with no code at all, so they aren't
+  // dropped into a single generic "Unassigned" bucket if a real team
+  // name is still available. The data bucket number is excluded (it's
+  // not a normal employee's cost).
   const teamCostRows = Object.entries(
-    normalRows.reduce<Record<string, { cost: number; code: string | null }>>((acc, row) => {
-      const team = row.lob || "Unassigned";
-      if (!acc[team]) acc[team] = { cost: 0, code: row.lob_code };
-      acc[team].cost += Number(row.total);
+    normalRows.reduce<Record<string, { cost: number; code: string | null; team: string }>>((acc, row) => {
+      const groupKey = row.lob_code ? `code:${row.lob_code}` : `name:${row.lob || "Unassigned"}`;
+      if (!acc[groupKey]) acc[groupKey] = { cost: 0, code: row.lob_code, team: row.lob || "Unassigned" };
+      acc[groupKey].cost += Number(row.total);
       return acc;
     }, {})
   )
-    .map(([team, { cost, code }]) => ({ team, code, cost }))
+    .map(([, { team, code, cost }]) => ({ team, code, cost }))
     .sort((a, b) => a.team.localeCompare(b.team));
   const teamCostTotal = teamCostRows.reduce((sum, r) => sum + r.cost, 0);
 

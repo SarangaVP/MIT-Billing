@@ -105,20 +105,24 @@ export default function MobitelBillsPage() {
   const mb = (v: string | number | null) => (v == null ? "—" : `${Number(v).toLocaleString()} Mb`);
   const hasUsageData = summaryRows.some((r) => r.imsi_number !== null);
 
-  // "Team cost" breakdown — groups every employee's Total by LOB, same as
-  // the source Excel's own "Team cost" sheet (verified to reproduce it
-  // exactly, aside from one known Rs. 0.34 manual-correction anomaly that
-  // existed in the original sheet itself). Also carries the numeric LOB
-  // code alongside the team name, when present (only in newer file exports).
+  // "Team cost" breakdown — groups every employee's Total by LOB CODE,
+  // not name. More reliable than grouping by the team name text:
+  // confirmed real cases in this same LOB reference data (shared with
+  // Dialog Mobile) where a team name label can be stale even after an
+  // employee's code was corrected, and where the same team name mapped
+  // to two different codes historically. Falls back to grouping by name
+  // only for the rare employee with no code at all, so they aren't
+  // dropped into a single generic "Unassigned" bucket if a real team
+  // name is still available.
   const teamCostRows = Object.entries(
-    summaryRows.reduce<Record<string, { cost: number; code: string | null }>>((acc, row) => {
-      const team = row.lob || "Unassigned";
-      if (!acc[team]) acc[team] = { cost: 0, code: row.lob_code };
-      acc[team].cost += Number(row.total);
+    summaryRows.reduce<Record<string, { cost: number; code: string | null; team: string }>>((acc, row) => {
+      const groupKey = row.lob_code ? `code:${row.lob_code}` : `name:${row.lob || "Unassigned"}`;
+      if (!acc[groupKey]) acc[groupKey] = { cost: 0, code: row.lob_code, team: row.lob || "Unassigned" };
+      acc[groupKey].cost += Number(row.total);
       return acc;
     }, {})
   )
-    .map(([team, { cost, code }]) => ({ team, cost, code }))
+    .map(([, { team, cost, code }]) => ({ team, cost, code }))
     .sort((a, b) => a.team.localeCompare(b.team));
   const teamCostTotal = teamCostRows.reduce((sum, r) => sum + r.cost, 0);
 
